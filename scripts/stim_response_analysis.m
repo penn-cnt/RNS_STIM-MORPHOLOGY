@@ -23,6 +23,12 @@ analysis_windows = load([datapath,'/',ptID,'/stim_windows_',ptID,'.mat']).analys
 visit_selection_array = load([datapath,'/',ptID,'/visit_selection_array_',ptID,'.mat']).visit_selection_array;
 ptime_trace = load([datapath,'/',ptID,'/posix_UTC_time_trace_',ptID,'.mat']).ptime_trace;
 
+[~,~,~, histT] = loadRNSptData(ptID, rns_config);
+stim_data = histT(:,["UTCStartTime","EpisodeStarts"]);
+cum_stims = movingCumulativeSum(stim_data{:,"EpisodeStarts"},90*24);
+[~,stim_idxs] = pdist2(posixtime(stim_data{:,"UTCStartTime"}),ptime_trace,"euclidean",'Smallest',1);
+stim_trace = cum_stims(stim_idxs);
+
 %% Separating Stimulations by stim
 % Need to flip each channel so that the evoked response is negative
 % [b,a] = butter(4,4/125,'high');
@@ -33,8 +39,10 @@ fprintf("%d unique events",length(visits))
 for i_u = 1:length(visits)
     visit_stims = analysis_windows(visit_selection_array == visits(i_u));
     v_times = ptime_trace(visit_selection_array == visits(i_u));
+    v_cstims = stim_trace(visit_selection_array == visits(i_u));
     visit_vals = [];
-    visit_times = [];
+%     visit_times = [];
+%     visit_cstims = [];
     for i_stim = 1:length(visit_stims)
         visit_data = visit_stims{i_stim}(750:1000,:);
 %         visit_data = filtfilt(b,a,visit_data);
@@ -45,22 +53,27 @@ for i_u = 1:length(visits)
         catch
             visit_vals(i_stim,:) = zeros(1,6)*nan;
         end
-        visit_times(i_stim) = v_times(i_stim);
+%         visit_times(i_stim) = v_times(i_stim);
+%         visit_cstims(i_stim) = v_cstims(i_stim);
     end
     all_visit_vals{i_u} = visit_vals;
-    all_visit_times{i_u} = visit_times;
+    all_visit_times{i_u} = v_times;
+    all_visit_cstims{i_u} = v_cstims;
 end
 
 visit_lens = cellfun(@(x) size(x,1),all_visit_vals);
 [~,i_sort] = sort(visit_lens,'descend');
 sorted_visit_vals = all_visit_vals(i_sort);
 sorted_visit_times = all_visit_times(i_sort);
+sorted_visit_cstims = all_visit_cstims(i_sort);
 sorted_lens = visit_lens(i_sort);
 all_vals = zeros(length(visits),max(visit_lens),6); all_vals(:) = nan;
 all_times = zeros(length(visits),max(visit_lens)); all_times(:) = nan;
+all_cstims = zeros(length(visits),max(visit_lens)); all_cstims(:) = nan;
 for i = 1:length(visits)
     all_vals(i,1:sorted_lens(i),:) = sorted_visit_vals{i};
     all_times(i,1:sorted_lens(i)) = sorted_visit_times{i};
+    all_cstims(i,1:sorted_lens(i)) = sorted_visit_cstims{i};
 end
 all_times = all_times-all_times(:,1);
 % all_vals = nanzscore(all_vals);
@@ -68,9 +81,25 @@ all_times = all_times-all_times(:,1);
 figure(100 + pt)
 corr_names = {"1 x 2","1 x 3","2 x 3","1 x 4", "2 x 4","3 x 4"};
 for i_plot = 1:size(all_vals,3)
+    flat_vals = reshape(all_vals(:,:,i_plot),1,[]);
+    flat_cstims = reshape(all_cstims(:,:),1,[]);
+    flat_times = reshape(all_times(:,:),1,[]);
+%     mdl = fitglm(array2table([all_vals(1,:,i_plot);all_cstims(1,:)]', ...
+%         "VariableNames",["Conn","CStims"]), 'CStims ~ Conn', ...
+%         "Distribution","poisson");
+     mdl = fitglm(array2table([flat_vals;flat_cstims]', ...
+            "VariableNames",["Conn","CStims"]), 'CStims ~ Conn', ...
+            "Distribution","poisson");
     subplot(3,2,i_plot)
-    plot(all_times(1,:),all_vals(1,:,i_plot),'o')
-    title(sprintf("Channels %s",corr_names{i_plot}))
+    hold on
+%     plot(flat_times(1,:),flat_vals,'o')
+    x = scaleDataToMinus1To1(all_cstims(1,:)');
+%     plot(flat_times,scaleDataToMinus1To1(flat_cstims),'r.')
+    scatter(flat_vals,flat_cstims)
+    title(sprintf("Ch. %s: p = %.2f, r2 = %.2f", ...
+        corr_names{i_plot}, ...
+        mdl.Coefficients{2,"pValue"}, ...
+        mdl.Rsquared.Ordinary))
 end
 sgtitle(ptID)
 end
@@ -104,3 +133,35 @@ f = gcf;
 ax.FontSize = 16;
 title(['Interictal Stimulation: ' ptID],'FontSize',24)
 % exportgraphics(gcf,'stim_trace.pdf')
+%% Functions
+function movingSum = movingCumulativeSum(inputArray, windowSize)
+    % Check if the window size is valid
+    if windowSize <= 0 || windowSize > length(inputArray)
+        error('Window size must be a positive integer smaller than or equal to the length of the input array.');
+    end
+    
+    % Initialize the output array to store the moving cumulative sum
+    movingSum = zeros(1, length(inputArray));
+    
+    % Calculate the cumulative sum for the first window
+    movingSum(1:windowSize) = cumsum(inputArray(1:windowSize),"omitnan");
+    
+    % Iterate through the rest of the array to update the moving sum
+    for i = windowSize+1:length(inputArray)
+        % Update the moving sum by adding the current element and subtracting the element that is now out of the window
+        movingSum(i) = sum(inputArray((i-windowSize+1):i),"omitnan");
+%         movingSum(i) = movingSum(i-1) + inputArray(i) - inputArray(i - windowSize);
+        if isnan(movingSum(i))
+            disp('x')
+        end
+    end
+end
+
+function scaledData = scaleDataToMinus1To1(data)
+    % Find the minimum and maximum values in the data
+    minValue = min(data);
+    maxValue = max(data);
+    
+    % Scale the data to the range [-1, 1]
+    scaledData = ((data - minValue) * 2) ./ (maxValue - minValue) - 1;
+end
