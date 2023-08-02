@@ -44,7 +44,7 @@ for i_u = 1:length(visits)
 %     visit_times = [];
 %     visit_cstims = [];
     for i_stim = 1:length(visit_stims)
-        visit_data = visit_stims{i_stim}(750:1000,:);
+        visit_data = visit_stims{i_stim}(500:750,:);
 %         visit_data = filtfilt(b,a,visit_data);
 %         visit_vals(i_stim,:) = min(visit_stims{i_stim}(625:725,:),[],1);
         c = triu(corr(visit_data),1);
@@ -79,25 +79,26 @@ all_times = all_times-all_times(:,1);
 % all_vals = nanzscore(all_vals);
 %% Stim Response Evolution Plotting
 figure(100 + pt)
-corr_names = {"1 x 2","1 x 3","2 x 3","1 x 4", "2 x 4","3 x 4"};
+corr_names = ["1 x 2","1 x 3","2 x 3","1 x 4", "2 x 4","3 x 4"];
 for i_plot = 1:size(all_vals,3)
     flat_vals = reshape(all_vals(:,:,i_plot),1,[]);
     flat_cstims = reshape(all_cstims(:,:),1,[]);
     flat_times = reshape(all_times(:,:),1,[]);
-%     mdl = fitglm(array2table([all_vals(1,:,i_plot);all_cstims(1,:)]', ...
-%         "VariableNames",["Conn","CStims"]), 'CStims ~ Conn', ...
-%         "Distribution","poisson");
-     mdl = fitglm(array2table([flat_vals;flat_cstims]', ...
-            "VariableNames",["Conn","CStims"]), 'CStims ~ Conn', ...
-            "Distribution","poisson");
+
+%      mdl = fitglm(array2table([flat_vals;flat_cstims]', ...
+%             "VariableNames",["Conn","CStims"]), 'CStims ~ Conn', ...
+%             "Distribution","poisson");
+
+     mdl = fitglm(array2table([flat_times;flat_vals]', ...
+            "VariableNames",["times","conn"]), 'conn ~ times');
     subplot(3,2,i_plot)
     hold on
-%     plot(flat_times(1,:),flat_vals,'o')
-    x = scaleDataToMinus1To1(all_cstims(1,:)');
+    plot(flat_times(1,:),flat_vals,'o')
+%     x = scaleDataToMinus1To1(all_cstims(1,:)');
 %     plot(flat_times,scaleDataToMinus1To1(flat_cstims),'r.')
-    scatter(flat_vals,flat_cstims)
+%     scatter(flat_vals,flat_cstims)
     title(sprintf("Ch. %s: p = %.2f, r2 = %.2f", ...
-        corr_names{i_plot}, ...
+        corr_names(i_plot), ...
         mdl.Coefficients{2,"pValue"}, ...
         mdl.Rsquared.Ordinary))
 end

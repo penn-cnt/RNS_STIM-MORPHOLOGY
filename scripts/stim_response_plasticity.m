@@ -170,7 +170,7 @@ save([datapath,'/',ptID,'/posix_UTC_time_trace_',ptID,'.mat'],'ptime_trace')
 disp(['There are ' num2str(length(clean_stim_windows)) '/' num2str(length(clean_stims)) ' stimulations with no repeats']);
 
 %% Saving analysis windows
-analysis_windows_idxs = [clean_stim_windows(:,1)-data_window_idx, clean_stim_windows(:,1)+data_window_idx];
+analysis_windows_idxs = [clean_stim_windows(:,2)-data_window_idx, clean_stim_windows(:,2)+data_window_idx];
 analysis_windows = {};
 for i_win = 1:length(analysis_windows_idxs)
     analysis_windows{i_win} = double(PatientData(analysis_windows_idxs(i_win,1):analysis_windows_idxs(i_win,2),:));
