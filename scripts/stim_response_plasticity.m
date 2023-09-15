@@ -164,11 +164,11 @@ clean_stim_windows = clean_stims(clean_idxs,:);
 save([datapath,'/',ptID,'/stim_idxs_',ptID,'.mat'],'clean_stim_windows')
 time_trace = idx2time(ecogT,clean_stim_windows(:,1),...
             'timezone','UTC');
-save([datapath,'/',ptID,'/UTC_time_trace_',ptID,'.mat'],'time_trace')
+save([datapath,'/',ptID,'/stim_UTC_time_trace_',ptID,'.mat'],'time_trace')
 ptime_trace = posixtime(time_trace);
-save([datapath,'/',ptID,'/posix_UTC_time_trace_',ptID,'.mat'],'ptime_trace')
+save([datapath,'/',ptID,'/stim_posix_UTC_time_trace_',ptID,'.mat'],'ptime_trace')
 disp(['There are ' num2str(length(clean_stim_windows)) '/' num2str(length(clean_stims)) ' stimulations with no repeats']);
-
+continue
 %% Saving analysis windows
 analysis_windows_idxs = [clean_stim_windows(:,2)-data_window_idx, clean_stim_windows(:,2)+data_window_idx];
 analysis_windows = {};
