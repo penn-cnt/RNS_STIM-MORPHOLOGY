@@ -78,26 +78,34 @@ save([datapath,'/',ptID,'/event_windows_',ptID,'.mat'],'analysis_windows')
 %                 1,4; % diff
 %                 2,3; % diff
 %                 3,4];% diff
-freq_array = 4:100;
-freqs = [freq_array(1:end-1)',freq_array(2:end)'];
+% freq_array = 4:100;
+% freqs = [freq_array(1:end-1)',freq_array(2:end)'];
 % freqs = [4,8;8,15;15,30;30,100];
+
+% Prepping scales from cwt analysis
+win_len = 250*30;
+vpo = 5;
+[~,freqs] = cwt(analysis_windows{1}(1:win_len,1),'amor',fs, ...
+    'VoicesPerOctave',vpo,'FrequencyLimits',[4,100]);
+
+% Setting parameters
 num_freqs = length(freqs);
 num_conns = 6;
 options.orders = 8;
-win_len = 250*30;
 all_eeg = zeros(win_len,size(analysis_windows{1},2),length(analysis_windows));
-all_plvs = zeros(length(analysis_windows),num_conns,num_freqs);
+all_plvs = zeros(length(analysis_windows),num_conns+1,num_freqs);
 non_zero_events = ones(length(analysis_windows),1);
-parfor i_win = 1:length(analysis_windows)
+for i_win = 1:length(analysis_windows)
     if length(analysis_windows{i_win})<win_len
         non_zero_events(i_win) = 0;
         continue
     end
-%     signal = analysis_windows{i_win}(1:win_len,:);
-%     all_plvs(i_win,:,:) = clip_filtered_plv(signal,fs,freqs,options);
+    signal = analysis_windows{i_win}(1:win_len,:);
+    plv = clip_filtered_plv(signal,fs,freqs,options);
+    all_plvs(i_win,:,:) = plv;
 end
-% all_plvs = all_plvs(logical(non_zero_events),:,:);
-% save([datapath,'/',ptID,'/plvs_',ptID,'.mat'],'all_plvs')
+all_plvs = all_plvs(logical(non_zero_events),:,:);
+save([datapath,'/',ptID,'/cwt_plvs_',ptID,'.mat'],'all_plvs')
 
 clean_i_sched = i_sched(logical(use_events));
 safe_i_sched = clean_i_sched(logical(non_zero_events));

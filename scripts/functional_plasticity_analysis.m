@@ -8,43 +8,62 @@ addpath(genpath(rns_toolbox_path))
 datapath = rns_config.paths.RNS_PROCESSED_DATA_Folder;
 rns_config_path = fullfile(rns_toolbox_path, 'config.JSON');
 patient_info = struct2table(load(fullfile(rns_config.paths.RNS_metadata_path,'patients_Penn.mat')).patients_Penn);
+localization = load(fullfile(datapath,"localization.mat")).localization;
 
+calc_plasticity = true;
 ptList = {rns_config.patients.ID};
 nanzscore = @(x) (x - mean(x,2,"omitnan"))./std(x,[],[2,3],"omitnan");
 fs = 250;
+max_time_length = 0;
+bin_size = 45;
 %% Connectivity Trajectories
-
+if ~calc_plasticity
+    max_time_length = 39;
+else
 for pt = 1:length(ptList)
 %% Read Patient Data
 ptID = ptList{pt};
+pidx = strcmp(ptID,patient_info.ID);
+dday = patient_info{pidx,"implantDate"};
 disp(ptID)
 time_trace = load([datapath,'/',ptID,'/UTC_time_trace_',ptID,'.mat']).time_trace;
 ptime_trace = load([datapath,'/',ptID,'/posix_UTC_time_trace_',ptID,'.mat']).ptime_trace;
 all_plvs = load([datapath,'/',ptID,'/plvs_',ptID,'.mat']).all_plvs;
+% freqs = all_plvs(1,1,:); % Only if cwt_plvs
+% all_plvs = all_plvs(:,2:end,:); % Only if cwt_plvs
+con_labels = localization(pt).con_labels;
+plasticity(pt).con_labels = con_labels;
+plasticity(pt).ptID = ptID;
 
-
+% Loading Stimulation information
 [~,~,~, histT] = loadRNSptData(ptID, rns_config);
 stim_data = histT(:,["UTCStartTime","EpisodeStarts"]);
 cum_stims = movingCumulativeSum(stim_data{:,"EpisodeStarts"},90*24);
 [~,stim_idxs] = pdist2(posixtime(stim_data{:,"UTCStartTime"}),ptime_trace,"euclidean",'Smallest',1);
 stim_trace = cum_stims(stim_idxs);
 
+% Setting frequency information, uncomment if not using cwt derived plv
 freq_array = 4:100;
 freqs = [freq_array(1:end-1)',freq_array(2:end)'];
 
 %% Band Limited Network Trajectories
-% Need to examine the lowest time resolution that we can find within this
-% patient. Eventually may need to find lowest across patients.
-% plot(diff(time_trace))
-baseline_period = time_trace(1) + days(90);
+
+% Calculating the network trajecetories combined across a time window
+baseline_period = dday + days(90);
 baseline_mask = time_trace < baseline_period;
-implant_time = time_trace-time_trace(1);
+implant_time = time_trace- dday;
 implant_time = days(implant_time(~baseline_mask));
 
+% Uncomment if not using cwt
 freq_bands_mask = {(freqs(:,1) > 0 & freqs(:,2) <= 8),...
     (freqs(:,1) > 8) & (freqs(:,2) <= 15),...
     (freqs(:,1) > 15) & (freqs(:,2) <= 30),...
     (freqs(:,1) > 30) & (freqs(:,2) <= 100)};
+
+% freq_bands_mask = {(freqs > 0 & freqs <= 8),...
+%     (freqs > 8) & (freqs <= 15),...
+%     (freqs > 15) & (freqs <= 30),...
+%     (freqs > 30) & (freqs <= 100)};
 band_limited_plvs = zeros(size(all_plvs,1),size(all_plvs,2),length(freq_bands_mask));
 for mask = 1:length(freq_bands_mask)
     band_limited_plvs(:,:,mask) = mean(all_plvs(:,:,mask),3);
@@ -53,13 +72,19 @@ baseline_values = mean(band_limited_plvs(baseline_mask,:,:),1);
 
 dplv = (band_limited_plvs(~baseline_mask,:,:)-baseline_values)./baseline_values;
 
-bin_size = 60;
 bin_indices = floor(implant_time/bin_size);
 binned_counts = accumarray(bin_indices,1,[],@sum);
 binned_times = accumarray(bin_indices,implant_time,[],@max);
 binned_stims = accumarray(bin_indices,stim_trace(~baseline_mask));
 binned_dplvs = zeros(length(unique(bin_indices)),size(dplv,2),size(dplv,3));
 
+% Updating max length across patients
+if length(binned_times) > max_time_length
+    max_time_length = length(binned_times);
+end
+
+% Iterating through each frequency and connection and calculating
+% trajectories heading
 figure(pt)
 hold on
 for i = 1:size(band_limited_plvs,2)
@@ -67,27 +92,140 @@ for i = 1:size(band_limited_plvs,2)
         try
         test = accumarray(bin_indices,dplv(:,i,j),[],@mean);
         binned_dplvs(:,i,j) = test(logical(test));
-        subplot(6,1,i)
+        subplot(7,1,i)
         hold on
         plot(binned_times(logical(binned_times)),test(logical(test)))
         xlim([90,810])
         mdl = fitglm(test(logical(test)),binned_stims(logical(test)),"y~x1","Distribution","poisson");
         title(num2str(mdl.Rsquared.Ordinary))
+        
         catch
             disp("likely nan's in data")
         end
     end
 end
+plasticity(pt).times = binned_times(logical(binned_times));
+plasticity(pt).dplv = binned_dplvs;
+plasticity(pt).stim_counts = binned_stims;
+plasticity(pt).baseline_plvs = baseline_values;
+subplot(7,1,7)
+plot(binned_times(logical(binned_times)),binned_counts(logical(binned_counts)))
+xlim([90,810])
+sgtitle(ptID)
 continue
 %% Network NMF Trajectories
 [W,H,Q] = betaNTF(dplv,3);
-%%
 % figure
 % plot(time_trace(~baseline_mask),W(:,3))
 mdl = fitglm(W(:,3),stim_trace(~baseline_mask)','y ~ x1','Distribution',"poisson")
 R2 = mdl.Rsquared.Ordinary
 
 end
+save(fullfile(datapath,"plasticity.mat"),"plasticity")
+end
+close all
+%% Baseline PLV predicts Network Trajectory
+plasticity = load(fullfile(datapath,"plasticity.mat")).plasticity;
+freq_labels = ["Theta", "Alpha","Beta","Gamma"];
+frequencies = [];
+ids = [];
+base = [];
+plvs = [];
+for pt = 1:length(ptList)
+    ptID = plasticity(pt).ptID;
+    baseline_plvs = squeeze(plasticity(pt).baseline_plvs);
+    dplv = plasticity(pt).dplv;
+    times = plasticity(pt).times;
+    for i = 4%1:size(dplv,1)
+        for j = 1:size(dplv,2)
+            for k = 1:size(dplv,3)
+                frequencies = [frequencies; k];
+                ids = [ids; pt];
+                base = [base; baseline_plvs(j,k)];
+                plvs = [plvs; dplv(i,j,k)];
+            end
+        end
+    end
+end
+data_mat = [ids,frequencies,base,plvs];
+data_table = array2table(data_mat,"VariableNames",["IDs","Freqs","Baseline","DPLV"]);
+mdl = fitlme(data_table,"DPLV ~ Baseline + (1|Freqs) + (1|IDs)")
+%% Combining all traces across patients
+% Creating cell to contain the data
+% TODO: Add implant depth as a covariate
+plasticity = load(fullfile(datapath,"plasticity.mat")).plasticity;
+all_traces = cell(4,4,2); % Freq x Con type
+for i = 1:4
+    for j = 1:4
+        for k = 1:2
+            for d = 1:2
+                all_traces{i,j,k,d} = zeros(1,max_time_length);
+                all_traces{i,j,k,d}(:) = nan;
+            end
+        end
+    end
+end
+
+% Gouing through each patient and putting their 
+for pt = 1:length(ptList)
+    if ~localization(pt).meets_criteria || isempty(localization(pt).con_labels)
+        continue
+    end
+    pidx = strcmp(ptList{pt},patient_info.ID);
+    depth = patient_info{pidx,"leadLocations"};
+    plasticity(pt).meets_criteria = true;
+    if strcmp(depth,"M")
+        d = 1;
+    elseif strcmp(depth,"N")
+        d = 2;
+    else
+        plasticity(pt).meets_criteria=false;
+        continue
+    end
+
+    outcome = localization(pt).outcome(1);
+    outcome_loc = (outcome > 50) + 1;
+    dplvs = plasticity(pt).dplv;
+    locs = plasticity(pt).con_labels;
+    for i_con = 1:size(dplvs,2) % Iterate through each connection
+        for freq = 1:4 % iterate through each frequency
+            l = locs(i_con);
+            receiver = nan(1,max_time_length);
+            receiver(1:size(dplvs,1)) = dplvs(:,i_con,freq);
+            all_traces{freq,l,outcome_loc,d} = [all_traces{freq,l,outcome_loc}; receiver];
+        end
+    end
+end
+
+% Plotting
+for d = 1:2
+con_strings = ["inside soz", "between soz", "soz to normal","normal to normal"];
+depth_strings = ["Hippocampal","Neocortical"];
+colors = ["red","blue"];
+figure(d+10); 
+clf;
+time = 1:bin_size:bin_size*(max_time_length+1);
+time = time + 90;
+for i = 1:4
+    for j = 1:4
+        for o = 1:2
+            figure(d+10)
+            subplot(4,4,sub2ind([4,4],j,i))
+            hold on
+            plot_shaded(time,[0,median(all_traces{j,i,o,d}(2:end,:),1,'omitnan')], ...
+                [0,std(all_traces{j,i,o,d}(2:end,:),[],1,'omitnan')], ...
+                "Color",colors(o),"fill_color",colors(o),'fig_num',d+10)
+            ylabel(con_strings(i))
+            xlim([1,740])
+            ylim([-2,2])
+        end
+    end
+end
+figure(d+10)
+sgtitle(depth_strings(d))
+end
+
+
 %% Functions
 function movingSum = movingCumulativeSum(inputArray, windowSize)
     % Check if the window size is valid
