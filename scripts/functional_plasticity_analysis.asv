@@ -171,8 +171,7 @@ data_table = array2table(data_mat,"VariableNames",["IDs","Freqs","Baseline","DPL
 data_table.Freqs = categorical(data_table.Freqs);
 data_table.Connection = categorical(data_table.Connection);
 data_table.Depth = categorical(data_table.Depth);
-data_table = data_table(data_table.Freqs == categorical(1),:);
-mdl = fitlme(data_table,"DPLV ~ Baseline + Connection + Outcome + Depth + (1|IDs)");
+mdl = fitlme(data_table,"DPLV ~ Baseline + Connection + Outcome + Depth + Freqs + (1|IDs)")
 %% Combining all traces across patients
 % Creating cell to contain the data
 % TODO: Add implant depth as a covariate
