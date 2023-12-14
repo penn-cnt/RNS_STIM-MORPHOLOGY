@@ -10,7 +10,7 @@ datapath = rns_config.paths.RNS_PROCESSED_DATA_Folder;
 rns_config_path = fullfile(rns_toolbox_path, 'config.JSON');
 patient_info = struct2table(load(fullfile(rns_config.paths.RNS_metadata_path,'patients_Penn.mat')).patients_Penn);
 
-radius = 6;
+radius = 7;
 [x,y,z] = sphere;
 
 ptList = {rns_config.patients.ID};
@@ -117,9 +117,7 @@ for con = 1:size(conns,1)
         con_labels(con) = 3;
     end
 end
-if strcmp(patient_info{pidx,"leadLocations"},"M")
-    con_labels = [1;1;2;2;2;2];
-end
+if patient_info(pidx).leadLocatoins,"M"
 localization(pt).con_labels = con_labels;
 if isempty(con_labels)
     localization(pt).meets_criteria = false;

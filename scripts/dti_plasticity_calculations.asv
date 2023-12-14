@@ -8,20 +8,17 @@ addpath(genpath(rns_toolbox_path))
 datapath = rns_config.paths.RNS_PROCESSED_DATA_Folder;
 rns_config_path = fullfile(rns_toolbox_path, 'config.JSON');
 patient_info = struct2table(load(fullfile(rns_config.paths.RNS_metadata_path,'patients_Penn.mat')).patients_Penn);
-localization = load(fullfile(datapath,'localization.mat')).localization;
+
 ptList = {rns_config.patients.ID};
 %%
 for pt = 1:length(ptList)
 
+
 % Read Patient Data
 ptID = ptList{pt};
-pidx = find(strcmp(ptID,{localization.ptID}));
-if ~localization(pidx).meets_criteria
+if ~strcmp(ptID,"HUP047")
     continue
 end
-% if ~strcmp(ptID,"RNS021")
-%     continue
-% end
 disp(['Starting analysis for ',ptID])
 if ~exist([datapath ptID],'dir')
     mkdir(datapath,ptID)

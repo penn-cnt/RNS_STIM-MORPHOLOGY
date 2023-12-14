@@ -10,12 +10,12 @@ rns_config_path = fullfile(rns_toolbox_path, 'config.JSON');
 patient_info = struct2table(load(fullfile(rns_config.paths.RNS_metadata_path,'patients_Penn.mat')).patients_Penn);
 localization = load(fullfile(datapath,"localization.mat")).localization;
 
-calc_plasticity = false;
+calc_plasticity = true;
 ptList = {rns_config.patients.ID};
 nanzscore = @(x) (x - mean(x,2,"omitnan"))./std(x,[],[2,3],"omitnan");
 fs = 250;
 max_time_length = 0;
-bin_size = 45;
+bin_size = 90;
 %% Connectivity Trajectories
 if ~calc_plasticity
     max_time_length = 39;
@@ -23,14 +23,18 @@ else
 for pt = 1:length(ptList)
 %% Read Patient Data
 ptID = ptList{pt};
+lidx = strcmp(ptID,{localization.ptID});
+if ~localization(lidx).meets_criteria
+    continue
+end
 pidx = strcmp(ptID,patient_info.ID);
 dday = patient_info{pidx,"implantDate"};
 disp(ptID)
 time_trace = load([datapath,'/',ptID,'/UTC_time_trace_',ptID,'.mat']).time_trace;
 ptime_trace = load([datapath,'/',ptID,'/posix_UTC_time_trace_',ptID,'.mat']).ptime_trace;
-all_plvs = load([datapath,'/',ptID,'/plvs_',ptID,'.mat']).all_plvs;
-% freqs = all_plvs(1,1,:); % Only if cwt_plvs
-% all_plvs = all_plvs(:,2:end,:); % Only if cwt_plvs
+all_plvs = load([datapath,'/',ptID,'/cwt_corrs_',ptID,'.mat']).all_plvs;
+freqs = all_plvs(1,1,:); % Only if cwt_plvs
+all_plvs = all_plvs(:,2:end,:); % Only if cwt_plvs
 con_labels = localization(pt).con_labels;
 plasticity(pt).con_labels = con_labels;
 plasticity(pt).ptID = ptID;
@@ -42,9 +46,9 @@ cum_stims = movingCumulativeSum(stim_data{:,"EpisodeStarts"},90*24);
 [~,stim_idxs] = pdist2(posixtime(stim_data{:,"UTCStartTime"}),ptime_trace,"euclidean",'Smallest',1);
 stim_trace = cum_stims(stim_idxs);
 
-% Setting frequency information, uncomment if not using cwt derived plv
-freq_array = 4:100;
-freqs = [freq_array(1:end-1)',freq_array(2:end)'];
+% Setting frequency information, comment if using cwt
+% freq_array = 4:100;
+% freqs = [freq_array(1:end-1)',freq_array(2:end)'];
 
 %% Band Limited Network Trajectories
 
@@ -54,16 +58,18 @@ baseline_mask = time_trace < baseline_period;
 implant_time = time_trace- dday;
 implant_time = days(implant_time(~baseline_mask));
 
-% Uncomment if not using cwt
-freq_bands_mask = {(freqs(:,1) > 0 & freqs(:,2) <= 8),...
-    (freqs(:,1) > 8) & (freqs(:,2) <= 15),...
-    (freqs(:,1) > 15) & (freqs(:,2) <= 30),...
-    (freqs(:,1) > 30) & (freqs(:,2) <= 100)};
+% Comment if using CWT
+% freq_bands_mask = {(freqs(:,1) > 0 & freqs(:,2) <= 8),...
+%     (freqs(:,1) > 8) & (freqs(:,2) <= 15),...
+%     (freqs(:,1) > 15) & (freqs(:,2) <= 30),...
+%     (freqs(:,1) > 30) & (freqs(:,2) <= 100)};
 
-% freq_bands_mask = {(freqs > 0 & freqs <= 8),...
-%     (freqs > 8) & (freqs <= 15),...
-%     (freqs > 15) & (freqs <= 30),...
-%     (freqs > 30) & (freqs <= 100)};
+% Uncomment if using CWT
+freq_bands_mask = {(freqs > 0 & freqs <= 8),...
+    (freqs > 8) & (freqs <= 15),...
+    (freqs > 15) & (freqs <= 30),...
+    (freqs > 30) & (freqs <= 100)};
+
 band_limited_plvs = zeros(size(all_plvs,1),size(all_plvs,2),length(freq_bands_mask));
 for mask = 1:length(freq_bands_mask)
     band_limited_plvs(:,:,mask) = mean(all_plvs(:,:,mask),3);
@@ -121,11 +127,10 @@ mdl = fitglm(W(:,3),stim_trace(~baseline_mask)','y ~ x1','Distribution',"poisson
 R2 = mdl.Rsquared.Ordinary
 
 end
-save(fullfile(datapath,"plasticity.mat"),"plasticity")
+save(fullfile(datapath,sprintf("corr_plasticity_%s.mat",bin_size)),"plasticity")
 end
 close all
 %% Baseline PLV predicts Network Trajectory
-plasticity = load(fullfile(datapath,"plasticity.mat")).plasticity;
 freq_labels = ["Theta", "Alpha","Beta","Gamma"];
 frequencies = [];
 ids = [];
@@ -152,7 +157,7 @@ for pt = 1:length(ptList)
     baseline_plvs = squeeze(plasticity(pt).baseline_plvs);
     dplv = plasticity(pt).dplv;
     times = plasticity(pt).times;
-    for i = 6%1:size(dplv,1)
+    for i = 4%1:size(dplv,1)
         for j = 1:size(dplv,2)
             for k = 1:size(dplv,3)
                 frequencies = [frequencies; k];
@@ -171,11 +176,13 @@ data_table = array2table(data_mat,"VariableNames",["IDs","Freqs","Baseline","DPL
 data_table.Freqs = categorical(data_table.Freqs);
 data_table.Connection = categorical(data_table.Connection);
 data_table.Depth = categorical(data_table.Depth);
-mdl = fitlme(data_table,"DPLV ~ Baseline + Connection + Outcome + Depth + Freqs + (1|IDs)")
+% data_table = data_table(data_table.Freqs == categorical(1),:);
+mdl = fitlme(data_table,"DPLV ~ Baseline*Connection + Depth + Freqs")
+plot(data_table{:,"Baseline"},data_table{:,"DPLV"},'o')
 %% Combining all traces across patients
 % Creating cell to contain the data
 % TODO: Add implant depth as a covariate
-plasticity = load(fullfile(datapath,"plasticity.mat")).plasticity;
+plasticity = load(fullfile(datapath,"corr_plasticity.mat")).plasticity;
 all_traces = cell(4,4,2); % Freq x Con type
 for i = 1:4
     for j = 1:4
@@ -205,7 +212,14 @@ for pt = 1:length(ptList)
         continue
     end
 
-    outcome = localization(pt).outcome(1);
+    outcome = localization(pt).outcome(2);
+    if outcome > 80
+        outcome_loc = 2;
+    elseif outcome < 50
+        outcome_loc = 1;
+    else
+        continue
+    end
     outcome_loc = (outcome > 50) + 1;
     dplvs = plasticity(pt).dplv;
     locs = plasticity(pt).con_labels;
@@ -237,6 +251,11 @@ for i = 1:4
             plot_shaded(time,[0,median(all_traces{j,i,o,d}(2:end,:),1,'omitnan')], ...
                 [0,std(all_traces{j,i,o,d}(2:end,:),[],1,'omitnan')], ...
                 "Color",colors(o),"fill_color",colors(o),'fig_num',d+10)
+%             to_plot = all_traces{j,i,o,d}(2:end,:);
+%             if isempty(to_plot)
+%                 continue
+%             end
+%             plot(time,[zeros(size(to_plot,1),1),to_plot],colors(o))
             ylabel(con_strings(i))
             xlim([1,740])
             ylim([-2,2])
