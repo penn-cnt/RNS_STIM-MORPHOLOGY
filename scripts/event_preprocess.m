@@ -52,11 +52,9 @@ for pt = 1:length(ptList)
     win_sec = 30;
     win_len = fs*win_sec;
     num_conns = 6;
-    options.orders = 4;
     freq_range = [4,100];
-    freq_bands = get_freq_bands(freq_range,fs);
-    num_freqs = size(freq_bands,1);
-
+    f = get_frequency(win_len,freq_range,fs);
+    num_freqs = size(f,1);
     % initializing
     all_plvs = zeros(length(analysis_windows),num_conns,num_freqs);
     non_zero_events = ones(length(analysis_windows),1);
@@ -66,11 +64,11 @@ for pt = 1:length(ptList)
             continue
         end
         signal = analysis_windows{i_win}(1:win_len,:);
-        plv = filtered_plv(signal,fs,freq_bands,options);
+        plv = wavelet_plv(signal,fs,freq_range);
         all_plvs(i_win,:,:) = plv;
     end
     all_plvs = all_plvs(logical(non_zero_events),:,:);
-    save(fullfile(datapath,ptID,['plvs_',ptID,'.mat']),'all_plvs','freq_bands')
+    save(fullfile(datapath,ptID,['plvs_',ptID,'.mat']),'all_plvs','f')
     
     clean_events = event_idxs(logical(non_zero_events),:);
     safe_i_sched = clean_i_sched(logical(non_zero_events));

@@ -35,7 +35,7 @@ else
         time_trace = load(fullfile(datapath,ptID,['UTC_time_trace_',ptID,'.mat'])).time_trace;
         ptime_trace = load(fullfile(datapath,ptID,['posix_UTC_time_trace_',ptID,'.mat'])).ptime_trace;
         all_plvs = load(fullfile(datapath,ptID,['plvs_',ptID,'.mat'])).all_plvs;
-        freqs = load(fullfile(datapath,ptID,['plvs_',ptID,'.mat'])).freq_bands;
+        freqs = load(fullfile(datapath,ptID,['plvs_',ptID,'.mat'])).f;
         con_labels = localization(pt).con_labels;
         if ~localization(pt).meets_criteria
             continue
@@ -52,10 +52,10 @@ else
         implant_time = days(implant_time(~baseline_mask)); % convert to day and only keep events after baseline
 
         % Define frequency bands and determine which bin plv data falls to
-        freq_bands_mask = {(freqs(:,1) > 0 & freqs(:,2) <= 8),...
-            (freqs(:,1) > 8) & (freqs(:,2) <= 15),...
-            (freqs(:,1) > 15) & (freqs(:,2) <= 30),...
-            (freqs(:,1) > 30) & (freqs(:,2) <= 100)};
+        freq_bands_mask = {(freqs > 0 & freqs <= 8),...
+            (freqs > 8) & (freqs <= 15),...
+            (freqs > 15) & (freqs <= 30),...
+            (freqs > 30) & (freqs <= 100)};
         
         % summarize raw plv into defined frequency bands
         band_limited_plvs = zeros(size(all_plvs,1),size(all_plvs,2),length(freq_bands_mask));
