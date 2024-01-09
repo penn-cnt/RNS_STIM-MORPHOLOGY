@@ -1,0 +1,184 @@
+{
+	"paths": {
+		"base":"/Volumes/USERS/haoershi/02_RNS_network_connectivity/Code",
+		"RNS_project_code_path": "multidien-cycle-biomarkers",
+		"RNS_processing_toolbox":"RNS_processing_toolbox-main",
+		"RNS_RAW_Folder": "",
+		"RNS_DATA_Folder": "/Volumes/DATA/Human_Data/NeuroPace/",
+		"RNS_PROCESSED_DATA_Folder": "RNS_STIM-MORPHOLOGY/user_data",
+		"RNS_metadata_path": "RNS_processing_toolbox-main"
+	},
+	"boxKeys": {
+		"CLIENT_ID": "",
+		"CLIENT_SECRET": "",
+		"CLIENT_ACCESS_TOKEN": "",
+		"Folder_ID": ""
+	},
+	"institution": "UPenn",
+	"patients": 
+	[
+		{
+			"ID": "HUP096",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS001"
+		}, 
+		{
+			"ID": "HUP153",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS003"
+		},
+		{
+			"ID": "HUP108",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS005"
+		},
+		{
+			"ID": "HUP136",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS006"
+		},
+		{
+			"ID": "HUP127",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS007"
+		},
+		{
+			"ID": "HUP059",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS010"
+		},
+		{
+			"ID": "HUP159",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS020"
+		},
+		{
+			"ID": "HUP121",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS015"
+		},
+		{
+			"ID": "HUP147",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS014"
+		},
+		{
+			"ID": "HUP131",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS018"
+		},
+		{
+			"ID": "HUP047",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS011"
+		},
+		{
+			"ID": "HUP143",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS009"
+		},
+		{
+			"ID": "HUP084",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS016"
+		},
+		{
+			"ID": "HUP128",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS008"
+		},
+		{
+			"ID": "RNS021",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS021"
+		},
+		{
+			"ID": "HUP156",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS019"
+		},
+		{
+			"ID": "HUP109",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS017"
+		},
+		{
+			"ID": "HUP137",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS002"
+		},
+		{
+			"ID": "HUP101",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS013"
+		},
+		{
+			"ID": "RNS022",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS022"
+		},
+		{
+			"ID": "HUP182",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS023"
+		},
+		{
+			"ID": "HUP205",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS024"
+		},
+
+		{
+			"ID": "RNS026",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS026"
+		},
+	    {
+			"ID": "HUP197",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS027"
+		},
+		{
+			"ID": "HUP129",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS028"
+		},
+		{
+			"ID": "RNS029",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS029"
+		},
+		{
+			"ID": "HUP199",
+			"PDMS_ID": "",
+			"Initials": "",
+			"RNS_ID": "RNS030"
+		}
+	]
+}
