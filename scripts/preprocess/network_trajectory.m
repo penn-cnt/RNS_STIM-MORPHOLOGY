@@ -14,9 +14,7 @@ localization = load(fullfile(datapath,"localization.mat")).localization;
 
 fs = 250;
 bin_size = 90; % subject to change
-% ttdays = 1050;
 base_days = 90;
-n_bin = ceil((ttdays-base_days)/bin_size);
 %% Connectivity Trajectories
 for pt = 1:length(ptList)
     %% Read Patient Data
@@ -27,7 +25,8 @@ for pt = 1:length(ptList)
     all_plvs = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).all_plvs;
     freqs = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).f;
     con_labels = localization(pt).con_labels;
-    outcome = localization(pt).outcome_group;
+    outcome = localization(pt).outcome;
+    outcome_group = localization(pt).outcome_group;
     depth = localization(pt).depth;
 
     if ~localization(pt).meets_criteria
@@ -60,6 +59,7 @@ for pt = 1:length(ptList)
         (freqs > 30) & (freqs <= 100)};
     try
         resampled_dplv = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).resampled_dplv;
+        baseline_plv = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).baseline_plv;
     catch
         % summarize raw plv into defined frequency bands
         resampled_plv = zeros(size(all_plvs,1),size(all_plvs,2),length(freq_bands_mask));
@@ -75,36 +75,27 @@ for pt = 1:length(ptList)
         
         resampled_dplv = dplvs;
 
-        save(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat']),'-append','resampled_plv','resampled_dplv')
+        save(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat']),'-append','resampled_plv','resampled_dplv','baseline_plv')
     end
     %% Calculate Rolling Mean
-%     [~,~,~, histT] = loadRNSptData(ptID, rns_config);
-%     stim_data = histT(:,["UTCStartTime","EpisodeStarts"]);
-%     stim_time = hours(stim_data{:,"UTCStartTime"} - dday);
-%     % calculates number of stims in a fixed time window prior to this
-%     % time point
-%     cum_stims = movingCumulativeSum(stim_data{:,"EpisodeStarts"},180); %number of stimulations in a 90day period
-%     % find out the closest stim time to a clean event
-%     [~,stim_idxs] = pdist2(posixtime(stim_data{:,"UTCStartTime"}),ptime_trace,"euclidean",'Smallest',1);
-%     % get the accumulated stim for each event
-%     stim_trace = cum_stims(stim_idxs);
     % which bin the event belong to
     bin_indices = ceil((implant_time-base_days)/bin_size);
-    binned_counts = nan*zeros(n_bin,1);
-    binned_times = nan*zeros(n_bin,1);
-%     binned_stims = nan*zeros(n_bin,1);
-    binned_counts(1:max(bin_indices)) = accumarray(bin_indices,1,[],@sum); % number of cleaned events in each bin
-    binned_times(1:max(bin_indices)) = accumarray(bin_indices,implant_time,[],@max); % day of the latest event in each bin
-%     binned_stims(1:max(bin_indices)) = accumarray(bin_indices,stim_trace,[],@mean); % average cum stim in the previous period
+    n_bin = max(bin_indices);
+    nan_inds = ~ismember([1:n_bin],unique(bin_indices));
+    binned_counts = accumarray(bin_indices,1,[],@sum); % number of cleaned events in each bin
+    binned_times = accumarray(bin_indices,implant_time,[],@max); % day of the latest event in each bin
+    binned_counts(nan_inds) = nan;
+    binned_times(nan_inds) = nan;
     binned_dplvs = nan * zeros(n_bin,size(resampled_dplv,2),size(resampled_dplv,3));
-
+    
     % Iterating through each frequency and connection and calculating
     % trajectories heading
     for i = 1:size(resampled_dplv,2) % each chan pair
         for j = 1:size(resampled_dplv,3) % each frequency
-            binned_dplvs(1:max(bin_indices),i,j) = accumarray(bin_indices,resampled_dplv(:,i,j),[],@(x) mean(x,'omitnan'));
+            binned_dplvs(:,i,j) = accumarray(bin_indices,resampled_dplv(:,i,j),[],@(x) mean(x,'omitnan'));
         end
     end
+    binned_dplvs(nan_inds,:,:) = nan;
 
     reorg_dplvs = cell(6,4);
     for f = 1:4
@@ -119,6 +110,7 @@ for pt = 1:length(ptList)
     % store
     plasticity(pt).ptID = ptID;
     plasticity(pt).outcome = outcome;
+    plasticity(pt).outcome_group = outcome_group;
     plasticity(pt).depth = depth;
     plasticity(pt).con_labels = con_labels;
     plasticity(pt).times = binned_times;

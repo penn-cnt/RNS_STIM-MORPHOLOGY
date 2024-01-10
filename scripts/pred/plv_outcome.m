@@ -7,13 +7,12 @@ clear; close all;
 paths;
 patient_info = struct2table(load(which('patients_Penn.mat')).patients_Penn);
 ptList = {rns_config.patients.ID};
-localization = load(fullfile(datapath,"new_ver/localization.mat")).localization;
+localization = load(fullfile(datapath,"localization.mat")).localization;
 
-years = [1,2,3];
-fs = 250;
+% years = {1,2,3,'end'};
 ttdays = 365 * years;
 base_days = 90;
-calc_R2 = @(o_true,o_pred) 1 - sum((o_true-o_pred).^2) / sum(o_true-mean(o_true,'omitnan').^2);
+calc_R2 = @(o_true,o_pred) 1 - sum((o_true-o_pred).^2) / sum((o_true-mean(o_true,'omitnan')).^2);
 rng('default');
 try
     data_table = load(fullfile(datapath,'plv_slope_pred.mat')).data_table;
@@ -37,8 +36,6 @@ catch
 
         if length(outcome) > 3
             years = [1,2,3,length(outcome)];
-        elseif length(outcome) == 3
-            years = [1,2,3];
         else
             years = [1:length(outcome)];
         end
@@ -46,27 +43,16 @@ catch
         outcome_group = outcome_group(years);
 
         resampled_plv = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).resampled_plv;
+        resampled_dplv = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).resampled_dplv;
 
-        %% Calculate PLV percent change
-
-        % load event data
         dday = patient_info{pidx,"implantDate"};
         time_trace = load(fullfile(datapath,ptID,['UTC_time_trace_',ptID,'.mat'])).time_trace;
-        ptime_trace = load(fullfile(datapath,ptID,['posix_UTC_time_trace_',ptID,'.mat'])).ptime_trace;
-
+    
         % Calculating the network trajecetories combined across a time window
         baseline_period = dday + days(base_days);
         baseline_mask = time_trace < baseline_period;
         implant_time = time_trace - dday; % get relative day of events after implantation
-        implant_time = days(implant_time);
-        implant_time_dplv = implant_time(~baseline_mask); % convert to day
-
-        % dplv
-        baseline_plv = mean(resampled_plv(baseline_mask,:,:),1,'omitnan');
-        dplvs = resampled_plv(~baseline_mask,:,:);
-        dplvs = 100 * (dplvs ./ baseline_plv - 1);
-        dplvs(abs(dplvs) == inf) = nan;
-        resampled_dplv = dplvs;
+        implant_time = days(implant_time(~baseline_mask)); % convert to day
 
         %% Get Predicting Slope
         plv = squeeze(mean(resampled_plv(:,1:2,:),2,'omitnan'));
@@ -77,13 +63,12 @@ catch
         for i = 1:length(years)
             ydays = years(i) * 365;
             year_plv = plv(implant_time <= ydays,:);
-            year_dplv = dplv(implant_time_dplv <= ydays,:);
+            year_dplv = dplv(implant_time <= ydays,:);
             year_time = implant_time(implant_time <= ydays);
-            year_time_dplv = implant_time_dplv(implant_time_dplv <= ydays);
             for j = 1:4
                 p = polyfit(year_time,zscore(year_plv(:,j)),1);
                 plv_slopes(i,j) = p(1);
-                p = polyfit(year_time_dplv,zscore(year_dplv(:,j)),1);
+                p = polyfit(year_time,zscore(year_dplv(:,j)),1);
                 dplv_slopes(i,j) = p(1);
             end
             ID = [ID;pt];
@@ -94,6 +79,13 @@ catch
             ps = [ps;plv_slopes(i,:)];
             dps = [dps;dplv_slopes(i,:)];
         end
+        ID = [ID;pt];
+        d = [d;depth];
+        y = [y;99]; % append again for last year data, use 99 as indicator
+        o = [o;outcome_pred(i)];
+        o_group = [o_group;outcome_group(i)];
+        ps = [ps;plv_slopes(i,:)];
+        dps = [dps;dplv_slopes(i,:)];
     end
     data_mat = [ID,d,y,o,o_group,ps,dps];
     data_table = array2table(data_mat,"VariableNames",["IDs","Depth","Year","Outcome","OutcomeGroup", ...
@@ -113,7 +105,7 @@ R2_all_null = {};
 pR2_all = [];
 for d = 1:2
 % one model for each depth type
-    for y = 1:3
+    for y = [1,2,3,99]
     % first 3 years first
         sub_data = table2array(data_table(data_table.Depth == d & data_table.Year == y,:));
         o_true = sub_data(:,4);
@@ -156,20 +148,20 @@ for d = 1:2
         params_all = [params_all,norm_params];
     end
 end
-R2_all = reshape(R2_all,[3,2])';
-params_all = reshape(params_all,[3,2])';
-preds_all = reshape(preds_all,[3,2])';
-trues_all = reshape(trues_all,[3,2])';
-R2_all_null = reshape(R2_all_null,[3,2])';
-pR2_all = reshape(pR2_all,[3,2])';
+R2_all = reshape(R2_all,[4,2])';
+params_all = reshape(params_all,[4,2])';
+preds_all = reshape(preds_all,[4,2])';
+trues_all = reshape(trues_all,[4,2])';
+R2_all_null = reshape(R2_all_null,[4,2])';
+pR2_all = reshape(pR2_all,[4,2])';
 save(fullfile(datapath,'plv_slope_pred.mat'),'-append','R2_all','preds_all','trues_all','params_all','R2_all_null','pR2_all');
 %% plotting
 % Fig.3A/D
 depth_strings = {'Hippocampal','Neocortical'};
 f = figure('Position',[100,100,1200,600]);
 for d = 1:2
-    for y = 1:3
-        subplot(2,3,(d-1)*3+y)
+    for y = 1:4
+        subplot(2,4,(d-1)*4+y)
         scatter(100*trues_all{d,y},100*preds_all{d,y},[],'k','filled');
         hold on
         line([0,100],[0,100],'Color','k','LineStyle','--')
@@ -182,7 +174,11 @@ for d = 1:2
             ylabel(depth_strings{d},'FontWeight','bold','FontSize',12)
         end
         if d == 1
-            title(['Year',num2str(y)],'FontWeight','bold','FontSize',12)
+            if y == 4
+                title(['Last Year'],'FontWeight','bold','FontSize',12)
+            else
+                title(['Year',num2str(y)],'FontWeight','bold','FontSize',12)
+            end
         end
     end
 end
@@ -193,14 +189,14 @@ h.YLabel.Visible='on';
 ylabel(h,'Predicted % Seizure Change','Position',[-0.05,0.500000476837158,0], ...
     'FontWeight','bold','FontSize',14);
 xlabel(h,'Observed % Seizure Change','FontWeight','bold','FontSize',14);
-saveas(f,fullfile(datapath,'figs','Fig.3A.png'))
+saveas(f,fullfile(figpath,'01_PLV_outcome','Fig.3A.png'))
 %% Fig.3B/E
 freqs = {'Theta','Alpha','Beta','Gamma'};
 cols = {'k','r'};
 g = figure('Position',[100,100,1200,600]);
 for d = 1:2
-    for y = 1:3
-        subplot(2,3,(d-1)*3+y)
+    for y = 1:4
+        subplot(2,4,(d-1)*4+y)
         to_plot = params_all{d,y};
         hold on
         for f = 1:4
@@ -216,9 +212,13 @@ for d = 1:2
             ylabel(depth_strings{d},'FontWeight','bold','FontSize',12)
         end
         if d == 1
-            title(['Year',num2str(y)],'FontWeight','bold','FontSize',12)
+            if y == 4
+                title(['Last Year'],'FontWeight','bold','FontSize',12)
+            else
+                title(['Year',num2str(y)],'FontWeight','bold','FontSize',12)
+            end
         end
     end
 end
-saveas(g,fullfile(datapath,'figs','Fig.3B.png'))
+saveas(g,fullfile(figpath,'01_PLV_outcome','Fig.3B.png'))
 close all

@@ -4,9 +4,8 @@ clear; close all;
 paths;
 patient_info = struct2table(load(which('patients_Penn.mat')).patients_Penn);
 ptList = {rns_config.patients.ID};
-localization = load(fullfile(datapath,"new_ver/localization.mat")).localization;
+localization = load(fullfile(datapath,"localization.mat")).localization;
 
-fs = 250;
 base_days = 90;
 rank = 3;
 windows = [0, 1, 2, 3, 4, 7, 14, 30, 90, 180, 360, 720];
@@ -31,6 +30,7 @@ catch
         % load plv
         all_plvs = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).all_plvs;
         freqs = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).f;
+        
         % load event data
         dday = patient_info{pidx,"implantDate"};
         time_trace = load(fullfile(datapath,ptID,['UTC_time_trace_',ptID,'.mat'])).time_trace;
@@ -38,12 +38,17 @@ catch
         implant_time = time_trace - dday; % get relative day of events after implantation
         implant_time = days(implant_time); % convert to day
         
+        % Calculating the network trajecetories combined across a time window
+        baseline_period = dday + days(base_days);
+        baseline_mask = time_trace < baseline_period;
+
         % NTF
         [fac_time, ~, ~] = betaNTF(permute(all_plvs,[1,3,2]),rank);
         for i = 1:3
             fac_time(:,i) = smooth(fac_time(:,i),360);
             fac_time(:,i) = (fac_time(:,i) - min(fac_time(:,i)))/(max(fac_time(:,i))-min(fac_time(:,i)));
         end
+        base_fac_time = squeeze(mean(fac_time(baseline_mask,:),1,'omitnan'));
     
         % Stim
         [~,~,~, histT] = loadRNSptData(ptID, rns_config);
@@ -54,10 +59,10 @@ catch
     
         % pred
         stim_trace_all = {};
-        params_all = {};
+        pValue_all = {};
         R2_all = [];
         R2_null_all = {};
-        params_null_all = {};
+        pValue_null_all = {};
         for j = 1:length(windows)
             if windows(j) == 0
                 stim_trace = stims;
@@ -69,38 +74,37 @@ catch
             end
             % prediction
             mdl = fitglm(fac_time,stim_trace,'Distribution','poisson');
-            mdl_null = fitglm(array2table(stim_trace,"VariableNames","stim"),'stim ~ 1','Distribution','poisson');
-            R2 = 1 - mdl.Deviance / mdl_null.Deviance;
-            b = mdl.Coefficients{2:4,'Estimate'};
+            R2 = mdl.Rsquared.Deviance;
+            p = mdl.Coefficients{2:4,'pValue'};
             stim_trace_all = [stim_trace_all,stim_trace];
-            params_all = [params_all,b];
+            pValue_all = [pValue_all,p];
             R2_all = [R2_all,R2];
             R2_null = [];
-            params_null = [];
+            pValue_null = [];
             for r = 1:100
                 inds = randperm(length(stim_trace));
                 stim_rnd = stim_trace(inds);
                 mdl_rnd = fitglm(fac_time,stim_rnd,'Distribution','poisson');
-                mdl_null_rnd = fitglm(array2table(stim_rnd,"VariableNames","stim"),'stim ~ 1','Distribution','poisson');
-                R2_rnd = 1 - mdl_rnd.Deviance / mdl_null_rnd.Deviance;
-                b_rnd = mdl_rnd.Coefficients{2:4,'Estimate'};
+                R2_rnd = mdl_rnd.Rsquared.Deviance;
+                p_rnd = mdl_rnd.Coefficients{2:4,'pValue'};
                 R2_null = [R2_null,R2_rnd];
-                params_null = [params_null,b_rnd];
+                pValue_null = [pValue_null,p_rnd];
             end
             R2_null_all = [R2_null_all,R2_null];
-            params_null_all = [params_null_all,params_null];
+            pValue_null_all = [pValue_null_all,pValue_null];
         end
         NTF_stim_pred(pt).ID = ptID;
         NTF_stim_pred(pt).depth = depth;
         NTF_stim_pred(pt).outcome = outcome_group;
         NTF_stim_pred(pt).fac_time = fac_time;
+        NTF_stim_pred(pt).base_fac_time = base_fac_time;
         NTF_stim_pred(pt).stim_data = stims;
         NTF_stim_pred(pt).time = implant_time;
         NTF_stim_pred(pt).stim_trace = stim_trace_all;
-        NTF_stim_pred(pt).params = params_all;
+        NTF_stim_pred(pt).pValue = pValue_all;
         NTF_stim_pred(pt).R2 = R2_all;
         NTF_stim_pred(pt).R2_null = R2_null_all;
-        NTF_stim_pred(pt).params_null = params_null_all;
+        NTF_stim_pred(pt).pValue_null = pValue_null_all;
     end
     NTF_stim_pred = NTF_stim_pred(~cellfun('isempty', {NTF_stim_pred.ID}));
     save(fullfile(datapath,['NTF_stim_pred.mat']),"NTF_stim_pred")
@@ -118,48 +122,60 @@ for pt = 1:length(NTF_stim_pred)
     plot(NTF_stim_pred(pt).time,NTF_stim_pred(pt).fac_time)
     xlabel('Days since implant')
     ylabel('Time expression')
-    saveas(f,fullfile(datapath,'figs','NTF',[NTF_stim_pred(pt).ID,'.png']))
+    saveas(f,fullfile(figpath,'02_NTF_stim',[NTF_stim_pred(pt).ID,'.png']))
 end
+close all
 %% Fig.4C
-year = 3;
 colors = ['g','b','k'];
 outcome_strings = ["Poor Responder","Good Responder","Null"];
 log_win = log10(windows+1);
 NTF_stim_pred = NTF_stim_pred(~cellfun('isempty', {NTF_stim_pred.outcome}));
-outcome = cellfun(@(x) x(year), {NTF_stim_pred.outcome});
-f = figure('Position',[100,100,1200,600]);
-for o = 1:2
-    sub_data = NTF_stim_pred(outcome == o);
-    R2_combined = vertcat(sub_data.R2);
-    shadedErrorBar(log_win,mean(R2_combined,1,'omitnan'), ...
-                        std(R2_combined,[],1,'omitnan')/ sqrt(size(R2_combined,1)), ...
-                        "lineProps",['-',colors(o)]);
-    hold on
-end
-R2_null_combined = [];
-for w = 1:length(windows)
-    tmp = cellfun(@(x) x{w},{NTF_stim_pred.R2_null},'UniformOutput',false);
-    R2_null_combined = [R2_null_combined,horzcat(tmp{:})'];
-end
-shadedErrorBar(log_win,mean(R2_null_combined,1,'omitnan'), ...
-                    std(R2_null_combined,[],1,'omitnan')/sqrt(size(R2_null_combined,1)), ...
-                    "lineProps",['-',colors(3)]);
-legend(outcome_strings)
-xticks(log_win)
-xticklabels(cellstr(num2str(windows')))
-
-% stats
-R2_combined = vertcat(NTF_stim_pred.R2);
-for w = 1:length(windows)
-    p = ranksum(R2_combined(:,w),R2_null_combined(:,w));
-    if p < 0.05
-        text(log_win(w),0.1,'*','FontSize',20)
+years = {1,2,3,'end'};
+for y = 1:length(years)
+    if isnumeric(years{y})
+        sub_data = NTF_stim_pred(cellfun(@(x) length(x) >= years{y}, {NTF_stim_pred.outcome}));
+        outcome = cellfun(@(x) x(years{y}), {sub_data.outcome});
+        year = num2str(years{y});
+    elseif strcmp(years{y},'end')
+        sub_data = NTF_stim_pred;
+        outcome = cellfun(@(x) x(end), {sub_data.outcome});
+        year = 'end';
     end
+    
+    f = figure('Position',[100,100,1200,600]);
+    for o = 1:2
+        sub_data = NTF_stim_pred(outcome == o);
+        R2_combined = vertcat(sub_data.R2);
+        shadedErrorBar(log_win,mean(R2_combined,1,'omitnan'), ...
+                            std(R2_combined,[],1,'omitnan')/ sqrt(size(R2_combined,1)), ...
+                            "lineProps",['-',colors(o)]);
+        hold on
+    end
+    R2_null_combined = [];
+    for w = 1:length(windows)
+        tmp = cellfun(@(x) x{w},{NTF_stim_pred.R2_null},'UniformOutput',false);
+        R2_null_combined = [R2_null_combined,horzcat(tmp{:})'];
+    end
+    shadedErrorBar(log_win,mean(R2_null_combined,1,'omitnan'), ...
+                        std(R2_null_combined,[],1,'omitnan')/sqrt(size(R2_null_combined,1)), ...
+                        "lineProps",['-',colors(3)]);
+    legend(outcome_strings)
+    xticks(log_win)
+    xticklabels(cellstr(num2str(windows')))
+    
+    % stats
+    R2_combined = vertcat(NTF_stim_pred.R2);
+    for w = 1:length(windows)
+        p = ranksum(R2_combined(:,w),R2_null_combined(:,w));
+        if p < 0.05
+            text(log_win(w),0.1,'*','FontSize',20)
+        end
+    end
+    [fda_pv,~] = FDA_test({NTF_stim_pred.R2},outcome);
+    text(1,0.8,['p=',num2str(fda_pv,'%.3f')],'FontSize',12)
+    saveas(f,fullfile(figpath,'02_NTF_stim',['comp_',year,'.png']))
 end
-[fda_pv,~] = FDA_test({NTF_stim_pred.R2},outcome);
-text(1,0.8,['p=',num2str(fda_pv,'%.3f')],'FontSize',12)
-saveas(f,fullfile(datapath,'figs','NTF',['comp_',num2str(year),'.png']))
-
+close all
 %%
 function movingSum = movingCumulativeSum(inputArray, windowSize)
 % Check if the window size is valid
