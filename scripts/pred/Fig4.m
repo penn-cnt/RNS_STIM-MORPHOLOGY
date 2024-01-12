@@ -9,12 +9,12 @@ localization = load(fullfile(datapath,"localization.mat")).localization;
 base_days = 90;
 rank = 3;
 windows = [0, 1, 2, 3, 4, 7, 14, 30, 90, 180, 360, 720];
+%% load data
 try
     NTF_stim_pred = load(fullfile(datapath,'NTF_stim_pred.mat')).NTF_stim_pred;
 catch
-    %% Connectivity Trajectories
     for pt = 1:length(ptList)
-        %% Read Patient Data
+        % Read Patient Data
         ptID = ptList{pt};
         pidx = strcmp(ptID,patient_info.ID);
         disp(['Starting analysis for ',ptID])
@@ -61,11 +61,12 @@ catch
         stim_trace_all = {};
         pValue_all = {};
         R2_all = [];
+        pR2_all = [];
         R2_null_all = {};
-        pValue_null_all = {};
         for j = 1:length(windows)
             if windows(j) == 0
                 stim_trace = stims;
+                stim_trace(isnan(stim_trace)) = 0;
             else
                 tmp = stim_data{:,"EpisodeStarts"};
                 tmp(isnan(tmp)) = 0;
@@ -80,7 +81,6 @@ catch
             pValue_all = [pValue_all,p];
             R2_all = [R2_all,R2];
             R2_null = [];
-            pValue_null = [];
             for r = 1:100
                 inds = randperm(length(stim_trace));
                 stim_rnd = stim_trace(inds);
@@ -88,10 +88,9 @@ catch
                 R2_rnd = mdl_rnd.Rsquared.Deviance;
                 p_rnd = mdl_rnd.Coefficients{2:4,'pValue'};
                 R2_null = [R2_null,R2_rnd];
-                pValue_null = [pValue_null,p_rnd];
             end
             R2_null_all = [R2_null_all,R2_null];
-            pValue_null_all = [pValue_null_all,pValue_null];
+            pR2_all = [pR2_all,mean(R2_null > R2)];
         end
         NTF_stim_pred(pt).ID = ptID;
         NTF_stim_pred(pt).depth = depth;
@@ -103,12 +102,13 @@ catch
         NTF_stim_pred(pt).stim_trace = stim_trace_all;
         NTF_stim_pred(pt).pValue = pValue_all;
         NTF_stim_pred(pt).R2 = R2_all;
+        NTF_stim_pred(pt).pR2 = pR2_all;
         NTF_stim_pred(pt).R2_null = R2_null_all;
-        NTF_stim_pred(pt).pValue_null = pValue_null_all;
     end
     NTF_stim_pred = NTF_stim_pred(~cellfun('isempty', {NTF_stim_pred.ID}));
     save(fullfile(datapath,['NTF_stim_pred.mat']),"NTF_stim_pred")
 end
+
 %% NTM plots
 %% Fig.4B
 for pt = 1:length(NTF_stim_pred)
@@ -132,29 +132,19 @@ log_win = log10(windows+1);
 NTF_stim_pred = NTF_stim_pred(~cellfun('isempty', {NTF_stim_pred.outcome}));
 years = {1,2,3,'end'};
 for y = 1:length(years)
-    if isnumeric(years{y})
-        sub_data = NTF_stim_pred(cellfun(@(x) length(x) >= years{y}, {NTF_stim_pred.outcome}));
-        outcome = cellfun(@(x) x(years{y}), {sub_data.outcome});
-        year = num2str(years{y});
-    elseif strcmp(years{y},'end')
-        sub_data = NTF_stim_pred;
-        outcome = cellfun(@(x) x(end), {sub_data.outcome});
-        year = 'end';
-    end
-    
+    [all_data,outcome] = getYearOutcome(NTF_stim_pred,years{y},'outcome',{'R2','R2_null'});
+    R2 = all_data{1};
+    R2_null = all_data{2};
+    R2_combined = vertcat(R2{:});
+    R2_null_combined = cellfun(@(x) vertcat(x{:})',R2_null,'UniformOutput',false);
+    R2_null_combined = vertcat(R2_null_combined{:});
     f = figure('Position',[100,100,1200,600]);
     for o = 1:2
-        sub_data = NTF_stim_pred(outcome == o);
-        R2_combined = vertcat(sub_data.R2);
-        shadedErrorBar(log_win,mean(R2_combined,1,'omitnan'), ...
-                            std(R2_combined,[],1,'omitnan')/ sqrt(size(R2_combined,1)), ...
+        sub_data = R2_combined(outcome == o,:);
+        shadedErrorBar(log_win,mean(sub_data,1,'omitnan'), ...
+                            std(sub_data,[],1,'omitnan')/ sqrt(size(sub_data,1)), ...
                             "lineProps",['-',colors(o)]);
         hold on
-    end
-    R2_null_combined = [];
-    for w = 1:length(windows)
-        tmp = cellfun(@(x) x{w},{NTF_stim_pred.R2_null},'UniformOutput',false);
-        R2_null_combined = [R2_null_combined,horzcat(tmp{:})'];
     end
     shadedErrorBar(log_win,mean(R2_null_combined,1,'omitnan'), ...
                         std(R2_null_combined,[],1,'omitnan')/sqrt(size(R2_null_combined,1)), ...
@@ -164,16 +154,15 @@ for y = 1:length(years)
     xticklabels(cellstr(num2str(windows')))
     
     % stats
-    R2_combined = vertcat(NTF_stim_pred.R2);
     for w = 1:length(windows)
         p = ranksum(R2_combined(:,w),R2_null_combined(:,w));
         if p < 0.05
             text(log_win(w),0.1,'*','FontSize',20)
         end
     end
-    [fda_pv,~] = FDA_test({NTF_stim_pred.R2},outcome);
+    [fda_pv,~] = FDA_test(R2,outcome);
     text(1,0.8,['p=',num2str(fda_pv,'%.3f')],'FontSize',12)
-    saveas(f,fullfile(figpath,'02_NTF_stim',['comp_',year,'.png']))
+    saveas(f,fullfile(figpath,'02_NTF_stim',['comp_',num2str(years{y}),'.png']))
 end
 close all
 %%

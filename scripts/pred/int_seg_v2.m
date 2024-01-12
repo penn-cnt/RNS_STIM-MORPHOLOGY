@@ -8,22 +8,18 @@ paths;
 patient_info = struct2table(load(which('patients_Penn.mat')).patients_Penn);
 ptList = {rns_config.patients.ID};
 localization = load(fullfile(datapath,"localization.mat")).localization;
-
-% years = {1,2,3,'end'};
-ttdays = 365 * years;
 base_days = 90;
 rng('default');
+%%
 try
     data_table = load(fullfile(datapath,'int_seg.mat')).data_table;
 catch
     ID = []; d = []; y = []; o = []; o_group = [];
     seg_int = [];
-    %% Connectivity Trajectories
     for pt = 1:length(ptList)
-        %% Read Patient Data
+        % Read Patient Data
         ptID = ptList{pt};
         pidx = strcmp(ptID,patient_info.ID);
-        %         disp(['Starting analysis for ',ptID])
 
         outcome = localization(pt).outcome;
         outcome_group = localization(pt).outcome_group;
@@ -42,17 +38,8 @@ catch
         outcome_group = outcome_group(years);
 
         resampled_dplv = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).resampled_dplv;
+        implant_time = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).implant_time;
 
-        dday = patient_info{pidx,"implantDate"};
-        time_trace = load(fullfile(datapath,ptID,['UTC_time_trace_',ptID,'.mat'])).time_trace;
-
-        % Calculating the network trajecetories combined across a time window
-        baseline_period = dday + days(base_days);
-        baseline_mask = time_trace < baseline_period;
-        implant_time = time_trace - dday; % get relative day of events after implantation
-        implant_time = days(implant_time(~baseline_mask)); % convert to day
-
-        %% Get Predicting Slope
         for i = 1:length(years)
             ydays = years(i) * 365;
             ydays2 = (years(i)-1) * 365;

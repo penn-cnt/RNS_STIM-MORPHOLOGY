@@ -1,25 +1,26 @@
-%% Baseline_outcome.m
-% Tests whether baseline connectivity predict outcome at one, two, and three years and last outcome
+%% Fig3.m
+% This version replicates Ankit's paper Fig 3's analysis
+% Specifically using intra-lead PLV slope till certain time point to predict outcome
+% at that point
 %% Settings
 clear; close all;
 paths;
 patient_info = struct2table(load(which('patients_Penn.mat')).patients_Penn);
 ptList = {rns_config.patients.ID};
 localization = load(fullfile(datapath,"localization.mat")).localization;
-plasticity = load(fullfile(datapath,"plasticity_90.mat")).plasticity;
 
 base_days = 90;
 rng('default');
-%% Baseline connectivity predict outcome
+%% load data
 try
-    data_table = load(fullfile(datapath,'baseline_outcome_pred.mat')).data_table;
+    data_table = load(fullfile(datapath,'plv_slope_pred.mat')).data_table;
 catch
     ID = []; d = []; y = []; o = []; o_group = [];
-    bp_inter = []; bp_intra = [];
-    for p = 1:length(plasticity)
+    ps_intra = []; dps_intra = []; ps_inter = []; dps_inter = [];
+    for pt = 1:length(ptList)
         % Read Patient Data
-        ptID = plasticity(p).ptID;
-        pt = find(strcmp(ptID,{localization.ptID}));
+        ptID = ptList{pt};
+        pidx = strcmp(ptID,patient_info.ID);
 
         outcome = localization(pt).outcome;
         outcome_group = localization(pt).outcome_group;
@@ -34,42 +35,67 @@ catch
         else
             years = [1:length(outcome)];
         end
-
         outcome_pred = arrayfun(@(x) max(0,x)/100,outcome(years));
         outcome_group = outcome_group(years);
 
-        % baseline
-        baseline_plv = plasticity(p).baseline_plvs;
-        baseline_plv_intra = squeeze(mean(baseline_plv(1:2,:),1,'omitnan'));
-        baseline_plv_inter = squeeze(mean(baseline_plv(3:6,:),1,'omitnan'));
+        resampled_plv = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).resampled_plv;
+        resampled_dplv = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).resampled_dplv;
+        implant_time = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).implant_time;
 
-        for yy = 1:length(years)
+        % Get Predicting Slope
+        plv = [];
+        dplv = [];
+        plv(1,:,:) = squeeze(mean(resampled_plv(:,1:2,:),2,'omitnan'));
+        dplv(1,:,:) = squeeze(mean(resampled_dplv(:,1:2,:),2,'omitnan'));
+        plv(2,:,:) = squeeze(mean(resampled_plv(:,3:6,:),2,'omitnan'));
+        dplv(2,:,:) = squeeze(mean(resampled_dplv(:,3:6,:),2,'omitnan'));
+        plv_slopes = nan * zeros(2,length(years),4);
+        dplv_slopes = nan * zeros(2,length(years),4);
+
+        for i = 1:length(years)
+            ydays = years(i) * 365;
+            year_plv = plv(:,implant_time <= ydays,:);
+            year_dplv = dplv(:,implant_time <= ydays,:);
+            year_time = implant_time(implant_time <= ydays);
+            for l = 1:2
+                for j = 1:4 % each freq band
+                    p = polyfit(year_time,zscore(year_plv(l,:,j)),1);
+                    plv_slopes(l,i,j) = p(1);
+                    p = polyfit(year_time,zscore(year_dplv(l,:,j)),1);
+                    dplv_slopes(l,i,j) = p(1);
+                end
+            end
             ID = [ID;pt];
             d = [d;depth];
-            y = [y;years(yy)];
-            o = [o;outcome_pred(yy)];
-            o_group = [o_group;outcome_group(yy)];
-            bp_inter = [bp_inter;baseline_plv_inter];
-            bp_intra = [bp_intra;baseline_plv_intra];
+            y = [y;years(i)];
+            o = [o;outcome_pred(i)];
+            o_group = [o_group;outcome_group(i)];
+            ps_intra = [ps_intra;plv_slopes(1,i,:)];
+            dps_intra = [dps_intra;dplv_slopes(1,i,:)];
+            ps_inter = [ps_inter;plv_slopes(2,i,:)];
+            dps_inter = [dps_inter;dplv_slopes(2,i,:)];
         end
         ID = [ID;pt];
         d = [d;depth];
-        y = [y;99];
-        o = [o;outcome_pred(yy)];
-        o_group = [o_group;outcome_group(yy)];
-        bp_inter = [bp_inter;baseline_plv_inter];
-        bp_intra = [bp_intra;baseline_plv_intra];
+        y = [y;99]; % append again for last year data, use 99 as indicator
+        o = [o;outcome_pred(i)];
+        o_group = [o_group;outcome_group(i)];
+        ps_intra = [ps_intra;plv_slopes(1,i,:)];
+        dps_intra = [dps_intra;dplv_slopes(1,i,:)];
+        ps_inter = [ps_inter;plv_slopes(2,i,:)];
+        dps_inter = [dps_inter;dplv_slopes(2,i,:)];
     end
-    data_mat = [ID,d,y,o,o_group,bp_intra,bp_inter];
-    data_table = array2table(data_mat,"VariableNames", ...
-        ["IDs","Depth","Year","Outcome","OutcomeGroup",...
-        "bplv_intra_Theta","bplv_intra_Alpha","bplv_intra_Beta","bplv_intra_Gamma", ...
-        "bplv_inter_Theta","bplv_inter_Alpha","bplv_inter_Beta","bplv_inter_Gamma"]);
-    save(fullfile(datapath,'baseline_outcome_pred.mat'),"data_table")
+    data_mat = [ID,d,y,o,o_group,squeeze(ps_intra),squeeze(dps_intra),squeeze(ps_inter),squeeze(dps_inter)];
+    data_table = array2table(data_mat,"VariableNames",["IDs","Depth","Year","Outcome","OutcomeGroup", ...
+        "Theta_Intra_PLV","Alpha_Intra_PLV","Beta_Intra_PLV","Gamma_Intra_PLV", ...
+        "Theta_Intra_dPLV","Alpha_Intra_dPLV","Beta_Intra_dPLV","Gamma_Intra_dPLV", ...
+        "Theta_Inter_PLV","Alpha_Inter_PLV","Beta_Inter_PLV","Gamma_Inter_PLV", ...
+        "Theta_Inter_dPLV","Alpha_Inter_dPLV","Beta_Inter_dPLV","Gamma_Inter_dPLV"]);
+    save(fullfile(datapath,'plv_slope_pred.mat'),"data_table")
 end
+
 %% prediction
-pred_range = reshape([6:13],4,2)';
-label = {'intra','inter'};
+pred_range = reshape([6:21],4,4)';
 for n = 1:size(pred_range,1)
     R2_all = [];
     params_all = {};
@@ -77,10 +103,11 @@ for n = 1:size(pred_range,1)
     trues_all = {};
     R2_all_null = {};
     pR2_all = [];
+    label = data_table.Properties.VariableNames{pred_range(n,1)};
+    label(1:strfind(label,'_')) = [];
     for d = 1:2
         % one model for each depth type
         for y = [1,2,3,99]
-            % first 3 years first
             sub_data = table2array(data_table(data_table.Depth == d & data_table.Year == y,:));
             o_true = sub_data(:,4);
             mdl = fitglm(sub_data(:,pred_range(n,:)),o_true,'Distribution','binomial','Intercept',false);
@@ -95,6 +122,7 @@ for n = 1:size(pred_range,1)
 
             % permutated
             params_null = [];
+            preds_null = [];
             R2_null = [];
             for r = 1:100
                 inds = randperm(length(o_true));
@@ -102,6 +130,8 @@ for n = 1:size(pred_range,1)
                 mdl_rnd = fitglm(sub_data(:,pred_range(n,:)),o_true_rnd,'Distribution','binomial','Intercept',false);
                 b_rnd = mdl_rnd.Coefficients{:,"Estimate"};
                 params_null = [params_null,b_rnd];
+                o_pred_rnd = predict(mdl_rnd,sub_data(:,pred_range(n,:)));
+                preds_null = [preds_null,o_pred_rnd];
                 R2_rnd = mdl_rnd.Rsquared.Ordinary;
                 R2_null = [R2_null,R2_rnd];
             end
@@ -125,18 +155,19 @@ for n = 1:size(pred_range,1)
     trues_all = reshape(trues_all,[4,2])';
     R2_all_null = reshape(R2_all_null,[4,2])';
     pR2_all = reshape(pR2_all,[4,2])';
-    save(fullfile(datapath,['baseline_outcome_pred_',label{n},'.mat']),'R2_all','preds_all','trues_all','params_all','R2_all_null','pR2_all');
+    save(fullfile(datapath,['Outcome_Pred_',label,'.mat']),'R2_all','preds_all','trues_all','params_all','R2_all_null','pR2_all');
 end
 %% plotting
 % Fig.3A/D
 depth_strings = {'Hippocampal','Neocortical'};
-pred_range = reshape([6:13],4,2)';
-label = {'intra','inter'};
+pred_range = reshape([6:21],4,4)';
 for n = 1:size(pred_range,1)
-    if ~exist(fullfile(figpath,'03_Baseline_outcome',label{n}),'dir')
-        mkdir(fullfile(figpath,'03_Baseline_outcome',label{n}))
+    label = data_table.Properties.VariableNames{pred_range(n,1)};
+    label(1:strfind(label,'_')) = [];
+    if ~exist(fullfile(figpath,'01_PLV_outcome',label),'dir')
+        mkdir(fullfile(figpath,'01_PLV_outcome',label))
     end
-    load(fullfile(datapath,['baseline_outcome_pred_',label{n},'.mat']))
+    load(fullfile(datapath,['Outcome_Pred_',label,'.mat']))
     f = figure('Position',[100,100,1200,600]);
     for d = 1:2
         for y = 1:4
@@ -168,15 +199,17 @@ for n = 1:size(pred_range,1)
     ylabel(h,'Predicted % Seizure Change','Position',[-0.05,0.500000476837158,0], ...
         'FontWeight','bold','FontSize',14);
     xlabel(h,'Observed % Seizure Change','FontWeight','bold','FontSize',14);
-    saveas(f,fullfile(figpath,'03_Baseline_outcome',label{n},'Fig.3A.png'))
+    saveas(f,fullfile(figpath,'01_PLV_outcome',label,'Fig.3A.png'))
 end
+close all
 %% Fig.3B/E
 freqs = {'Theta','Alpha','Beta','Gamma'};
 cols = {'k','r'};
-pred_range = reshape([6:13],4,2)';
-label = {'intra','inter'};
+pred_range = reshape([6:21],4,4)';
 for n = 1:size(pred_range,1)
-    load(fullfile(datapath,['baseline_outcome_pred_',label{n},'.mat']))
+    label = data_table.Properties.VariableNames{pred_range(n,1)};
+    label(1:strfind(label,'_')) = [];
+    load(fullfile(datapath,['Outcome_Pred_',label,'.mat']))
     g = figure('Position',[100,100,1200,600]);
     for d = 1:2
         for y = 1:4
@@ -204,6 +237,6 @@ for n = 1:size(pred_range,1)
             end
         end
     end
-    saveas(g,fullfile(figpath,'03_Baseline_outcome',label{n},'Fig.3B.png'))
+    saveas(g,fullfile(figpath,'01_PLV_outcome',label,'Fig.3B.png'))
 end
 close all
