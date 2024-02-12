@@ -1,21 +1,27 @@
 %% NTF_stim.m
 %% Settings
-clear; close all;
+function Fig4(regress_dist,outcome_option)
+close all;
 paths;
 patient_info = struct2table(load(which('patients_Penn.mat')).patients_Penn);
 ptList = {rns_config.patients.ID};
 localization = load(fullfile(datapath,"localization.mat")).localization;
-
+if regress_dist
+    suffix = '_regdist';
+    figpath = fullfile(figpath,'regdist');
+else
+    suffix = '';
+end
 base_days = 90;
 rank = 3;
 windows = [0, 1, 2, 3, 4, 7, 14, 30, 90, 180, 360, 720];
 %% load data
 try
-    NTF_stim_pred = load(fullfile(datapath,'NTF_stim_pred.mat')).NTF_stim_pred;
+    NTF_stim_pred = load(fullfile(datapath,['NTF_stim_pred',suffix,'.mat'])).NTF_stim_pred;
 catch
-    for pt = 1:length(ptList)
+    for pt = 1:length(localization)
         % Read Patient Data
-        ptID = ptList{pt};
+        ptID = localization(pt).ptID;
         pidx = strcmp(ptID,patient_info.ID);
         disp(['Starting analysis for ',ptID])
     
@@ -28,8 +34,8 @@ catch
         depth = localization(pt).depth;
     
         % load plv
-        all_plvs = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).all_plvs;
-        freqs = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,'.mat'])).f;
+        all_plvs = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,suffix,'.mat'])).all_plvs;
+        freqs = load(fullfile(datapath,ptID,['cwt_plvs_',ptID,suffix,'.mat'])).f;
         
         % load event data
         dday = patient_info{pidx,"implantDate"};
@@ -106,31 +112,38 @@ catch
         NTF_stim_pred(pt).R2_null = R2_null_all;
     end
     NTF_stim_pred = NTF_stim_pred(~cellfun('isempty', {NTF_stim_pred.ID}));
-    save(fullfile(datapath,['NTF_stim_pred.mat']),"NTF_stim_pred")
+    save(fullfile(datapath,['NTF_stim_pred',suffix,'.mat']),"NTF_stim_pred")
 end
 
 %% NTM plots
 %% Fig.4B
-for pt = 1:length(NTF_stim_pred)
-    f = figure('Position',[100,100,1200,600]);
-    subplot(2,1,1)
-    plot(NTF_stim_pred(pt).time,NTF_stim_pred(pt).stim_data,'k')
-    hold on
-    plot(NTF_stim_pred(pt).time,NTF_stim_pred(pt).stim_trace{9},'r')
-    ylabel('Hourly/Cumul. # therapies')
-    subplot(2,1,2)
-    plot(NTF_stim_pred(pt).time,NTF_stim_pred(pt).fac_time)
-    xlabel('Days since implant')
-    ylabel('Time expression')
-    saveas(f,fullfile(figpath,'02_NTF_stim',[NTF_stim_pred(pt).ID,'.png']))
-end
-close all
+% for pt = 1:length(NTF_stim_pred)
+%     f = figure('Position',[100,100,1200,600]);
+%     subplot(2,1,1)
+%     plot(NTF_stim_pred(pt).time,NTF_stim_pred(pt).stim_data,'k')
+%     hold on
+%     plot(NTF_stim_pred(pt).time,NTF_stim_pred(pt).stim_trace{9},'r')
+%     ylabel('Hourly/Cumul. # therapies')
+%     subplot(2,1,2)
+%     plot(NTF_stim_pred(pt).time,NTF_stim_pred(pt).fac_time)
+%     xlabel('Days since implant')
+%     ylabel('Time expression')
+%     saveas(f,fullfile(figpath,'02_NTF_stim',[NTF_stim_pred(pt).ID,'.png']))
+% end
+% close all
 %% Fig.4C
 colors = ['g','b','k'];
 outcome_strings = ["Poor Responder","Good Responder","Null"];
 log_win = log10(windows+1);
 NTF_stim_pred = NTF_stim_pred(~cellfun('isempty', {NTF_stim_pred.outcome}));
 years = {1,2,3,'end'};
+if ~exist(fullfile(figpath,'02_NTF_stim',num2str(outcome_option)),'dir')
+    mkdir(fullfile(figpath,'02_NTF_stim',num2str(outcome_option)));
+end
+for i = 1:length(NTF_stim_pred)
+    NTF_stim_pred(i).outcome = NTF_stim_pred(i).outcome(outcome_option,:);
+
+end
 for y = 1:length(years)
     [all_data,outcome] = getYearOutcome(NTF_stim_pred,years{y},'outcome',{'R2','R2_null'});
     R2 = all_data{1};
@@ -138,7 +151,7 @@ for y = 1:length(years)
     R2_combined = vertcat(R2{:});
     R2_null_combined = cellfun(@(x) vertcat(x{:})',R2_null,'UniformOutput',false);
     R2_null_combined = vertcat(R2_null_combined{:});
-    f = figure('Position',[100,100,1200,600]);
+    f = figure('Position',[100,100,1200,600],'Visible','Off');
     for o = 1:2
         sub_data = R2_combined(outcome == o,:);
         shadedErrorBar(log_win,mean(sub_data,1,'omitnan'), ...
@@ -162,9 +175,10 @@ for y = 1:length(years)
     end
     [fda_pv,~] = FDA_test(R2,outcome);
     text(1,0.8,['p=',num2str(fda_pv,'%.3f')],'FontSize',12)
-    saveas(f,fullfile(figpath,'02_NTF_stim',['comp_',num2str(years{y}),'.png']))
+    saveas(f,fullfile(figpath,'02_NTF_stim',num2str(outcome_option),['comp_',num2str(years{y}),'.png']))
 end
 close all
+end
 %%
 function movingSum = movingCumulativeSum(inputArray, windowSize)
 % Check if the window size is valid

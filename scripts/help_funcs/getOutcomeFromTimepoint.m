@@ -106,7 +106,7 @@ for i=1:nSets
             
             i_locf = find(pt_dates <= dateOut, 1, 'last');
             if isempty(i_locf)
-                warning('target time must be at least %0.2f years for set %d', min(years((pt_dates-dt_ref(i)))), i)
+                warning(sprintf('target time must be at least %0.2f years for set %d', min(years((pt_dates-dt_ref(i)))), i))
                 continue
             end
             

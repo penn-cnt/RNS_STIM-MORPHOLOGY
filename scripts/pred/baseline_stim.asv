@@ -42,8 +42,8 @@ for y = 1:length(years)
     all_data = {bplv_intra_combined,bplv_inter_combined,bfc_combined};
     label = {'intra','inter','bfc'};
     for n = 1:3
-        if ~exist(fullfile(figpath,'05_Baseline_stim',num2str(outcome_option),label{n}),'dir')
-            mkdir(fullfile(figpath,'05_Baseline_stim',num2str(outcome_option),label{n}));
+        if ~exist(fullfile(figpath,'05_Baseline_stim',num2str(outcome_option),l),'dir')
+            mkdir(fullfile(figpath,'05_Baseline_stim',num2str(outcome_option)));
         end
         tmp = all_data{n};
         for w = 1:length(windows)

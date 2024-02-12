@@ -1,5 +1,9 @@
 function [fda_pv,sig_days] = FDA_test(data,outcome)
 rng('default')
+if ~ismember(1,outcome) || ~ismember(2,outcome)
+    fda_pv = nan;
+    sig_days = [];
+else
 [SR_mean,NR_mean] = extract_mean(data,outcome);
 true_diff = mean(SR_mean - NR_mean,'omitnan');
 null_diff = [];
@@ -21,11 +25,17 @@ n_day = size(data{1},1);
 SR_data = data(outcome == 2);
 NR_data = data(outcome == 1);
 for i = 1:n_day
-    pv = ranksum(cell2mat(cellfun(@(x) x(i,:),SR_data,'UniformOutput',false)), ...
-                cell2mat(cellfun(@(x) x(i,:),NR_data,'UniformOutput',false)));
-    if pv < 0.05
-        sig_days = [sig_days;[i,pv]];
+    try
+        pv = ranksum(cell2mat(cellfun(@(x) x(i,:),SR_data,'UniformOutput',false)), ...
+                    cell2mat(cellfun(@(x) x(i,:),NR_data,'UniformOutput',false)));
+        if pv < 0.05
+            sig_days = [sig_days;[i,pv]];
+        end
+    catch
+        pv = nan;
+        sig_days = [];
     end
+end
 end
 end
 function [SR_mean,NR_mean] = extract_mean(data,outcome)

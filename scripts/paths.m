@@ -31,5 +31,14 @@ if ~exist(figpath, 'dir')
     mkdir(fullfile(figpath,'03_Baseline_outcome'))
     mkdir(fullfile(figpath,'04_Baseline_plv'))
     mkdir(fullfile(figpath,'05_Baseline_stim'))
+    mkdir(fullfile(figpath,'06_Int_seg'))
+    mkdir(fullfile(figpath,'regdist'))
+    mkdir(fullfile(figpath,'regdist','00_Network_trajectory'))
+    mkdir(fullfile(figpath,'regdist','01_PLV_outcome'))
+    mkdir(fullfile(figpath,'regdist','02_NTF_stim'))
+    mkdir(fullfile(figpath,'regdist','03_Baseline_outcome'))
+    mkdir(fullfile(figpath,'regdist','04_Baseline_plv'))
+    mkdir(fullfile(figpath,'regdist','05_Baseline_stim'))
+    mkdir(fullfile(figpath,'regdist','06_Int_seg'))
 end
-clearvars -except datapath figpath rns_config
+clear rootpath def_datapath rns_toolbox_path
