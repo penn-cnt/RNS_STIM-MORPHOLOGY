@@ -15,6 +15,7 @@ localization = load(fullfile(datapath,"localization.mat")).localization;
 bin_size = 90; % subject to change
 base_days = 90;
 regress_dist = 0;
+freq_strings = {'Theta','Alpha','Beta','Gamma'};
 if regress_dist
     suffix = '_regdist';
 else
@@ -204,7 +205,7 @@ for pt = 1:length(localization)
     % Calculating mean/stdiance in slope between event/time bins
     % within time bin
     slope_plv = diff(resampled_plv,[],1);
-    time_lapse = diff(implant_time/365,[],1);
+    time_lapse = diff(implant_time,[],1);
     slope_plv = slope_plv./time_lapse;
     slope_plv = [nan * zeros(1,6,4);slope_plv];
     slope_dplv = diff(resampled_dplv,[],1);
@@ -251,48 +252,131 @@ for pt = 1:length(localization)
     
     % fit line and get Rsquared and p, as other way to estimate stdiance
     % event level
+    fit_plv_R2 = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    fit_plv_p = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    fit_plv_coeff = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    fit_plv_pcoeff = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    full_result = [];
+    for i = 1:size(resampled_dplv,2)
+        for j = 1:size(resampled_dplv,3)
+            tbl = fitglmBS(implant_time,resampled_plv(:,i,j),100,true);
+            fit_plv_R2(i,j) = tbl{1,1};
+            fit_plv_p(i,j) = tbl{1,2};
+            fit_plv_coeff(i,j) = tbl{2,1};
+            fit_plv_pcoeff(i,j) = tbl{2,2};
+            tmp_result = [tbl{1,:},tbl{2,:}];
+            full_result = [full_result;tmp_result];
+        end
+    end
+    full_result = array2table(full_result, 'RowNames',strcat(cellstr(num2str(reshape(repmat([1:6],4,1),[],1))),{'_'},repmat(freq_strings',6,1)), ...
+            'VariableNames',{'R2','pR2','R2_lowerCI','R2_higherCI','b','pCoeff','b_lowerCI','b_higherCI'});
+    writetable(full_result,fullfile(datapath,'stats',[ptID,'_PLV_time.csv']),'WriteRowNames',true)
+
     fit_dplv_R2 = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
     fit_dplv_p = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
     fit_dplv_coeff = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
     fit_dplv_pcoeff = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    full_result = [];
     for i = 1:size(resampled_dplv,2)
         for j = 1:size(resampled_dplv,3)
-            tbl = fitglmBS(implant_time,resampled_dplv(:,i,j),100);
+            tbl = fitglmBS(implant_time,resampled_dplv(:,i,j),100,false);
             fit_dplv_R2(i,j) = tbl{1,1};
             fit_dplv_p(i,j) = tbl{1,2};
             fit_dplv_coeff(i,j) = tbl{2,1};
             fit_dplv_pcoeff(i,j) = tbl{2,2};
+            tmp_result = [tbl{1,:},tbl{2,:}];
+            full_result = [full_result;tmp_result];
         end
     end
+    full_result = array2table(full_result, 'RowNames',strcat(cellstr(num2str(reshape(repmat([1:6],4,1),[],1))),{'_'},repmat(freq_strings',6,1)), ...
+            'VariableNames',{'R2','pR2','R2_lowerCI','R2_higherCI','b','pCoeff','b_lowerCI','b_higherCI'});
+    writetable(full_result,fullfile(datapath,'stats',[ptID,'_dPLV_time.csv']),'WriteRowNames',true)
+
+    fit_plv_R2_bin = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    fit_plv_p_bin = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    fit_plv_coeff_bin = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    fit_plv_pcoeff_bin = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    full_result = [];
+    for i = 1:size(resampled_dplv,2)
+        for j = 1:size(resampled_dplv,3)
+            tbl = fitglmBS([1:n_bin]',binned_plv(:,i,j),100,true);
+            fit_plv_R2_bin(i,j) = tbl{1,1};
+            fit_plv_p_bin(i,j) = tbl{1,2};
+            fit_plv_coeff_bin(i,j) = tbl{2,1};
+            fit_plv_pcoeff_bin(i,j) = tbl{2,2};
+            tmp_result = [tbl{1,:},tbl{2,:}];
+            full_result = [full_result;tmp_result];
+        end
+    end
+    full_result = array2table(full_result, 'RowNames',strcat(cellstr(num2str(reshape(repmat([1:6],4,1),[],1))),{'_'},repmat(freq_strings',6,1)), ...
+            'VariableNames',{'R2','pR2','R2_lowerCI','R2_higherCI','b','pCoeff','b_lowerCI','b_higherCI'});
+    writetable(full_result,fullfile(datapath,'stats',[ptID,'_PLV_time_bin.csv']),'WriteRowNames',true)
+
+
     fit_dplv_R2_bin = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
     fit_dplv_p_bin = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
     fit_dplv_coeff_bin = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
     fit_dplv_pcoeff_bin = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    full_result = [];
     for i = 1:size(resampled_dplv,2)
         for j = 1:size(resampled_dplv,3)
-            tbl = fitglmBS([1:n_bin]',binned_dplv(:,i,j),100);
+            tbl = fitglmBS([1:n_bin]',binned_dplv(:,i,j),100,false);
             fit_dplv_R2_bin(i,j) = tbl{1,1};
             fit_dplv_p_bin(i,j) = tbl{1,2};
             fit_dplv_coeff_bin(i,j) = tbl{2,1};
             fit_dplv_pcoeff_bin(i,j) = tbl{2,2};
+            tmp_result = [tbl{1,:},tbl{2,:}];
+            full_result = [full_result;tmp_result];
         end
     end
+    full_result = array2table(full_result, 'RowNames',strcat(cellstr(num2str(reshape(repmat([1:6],4,1),[],1))),{'_'},repmat(freq_strings',6,1)), ...
+            'VariableNames',{'R2','pR2','R2_lowerCI','R2_higherCI','b','pCoeff','b_lowerCI','b_higherCI'});
+    writetable(full_result,fullfile(datapath,'stats',[ptID,'_dPLV_time_bin.csv']),'WriteRowNames',true)
+
 
     % fit line and get Rsquared and p, as other way to estimate stdiance
     % event level
+    fitstim_plv_R2 = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    fitstim_plv_p = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    fitstim_plv_coeff = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    fitstim_plv_pcoeff = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    full_result = [];
+    for i = 1:size(resampled_dplv,2)
+        for j = 1:size(resampled_dplv,3)
+            tbl = fitglmBS(stim_traces{10}(~baseline_mask),resampled_plv(:,i,j),100,true);
+            fitstim_plv_R2(i,j) = tbl{1,1};
+            fitstim_plv_p(i,j) = tbl{1,2};
+            fitstim_plv_coeff(i,j) = tbl{2,1};
+            fitstim_plv_pcoeff(i,j) = tbl{2,2};
+            tmp_result = [tbl{1,:},tbl{2,:}];
+            full_result = [full_result;tmp_result];
+        end
+    end
+    full_result = array2table(full_result, 'RowNames',strcat(cellstr(num2str(reshape(repmat([1:6],4,1),[],1))),{'_'},repmat(freq_strings',6,1)), ...
+            'VariableNames',{'R2','pR2','R2_lowerCI','R2_higherCI','b','pCoeff','b_lowerCI','b_higherCI'});
+    writetable(full_result,fullfile(datapath,'stats',[ptID,'_PLV_stim.csv']),'WriteRowNames',true)
+
+
     fitstim_dplv_R2 = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
     fitstim_dplv_p = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
     fitstim_dplv_coeff = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
     fitstim_dplv_pcoeff = nan * zeros(size(resampled_dplv,2),size(resampled_dplv,3));
+    full_result = [];
     for i = 1:size(resampled_dplv,2)
         for j = 1:size(resampled_dplv,3)
-            tbl = fitglmBS(stim_traces{10}(~baseline_mask),resampled_dplv(:,i,j),100);
+            tbl = fitglmBS(stim_traces{10}(~baseline_mask),resampled_dplv(:,i,j),100,false);
             fitstim_dplv_R2(i,j) = tbl{1,1};
             fitstim_dplv_p(i,j) = tbl{1,2};
             fitstim_dplv_coeff(i,j) = tbl{2,1};
             fitstim_dplv_pcoeff(i,j) = tbl{2,2};
+            tmp_result = [tbl{1,:},tbl{2,:}];
+            full_result = [full_result;tmp_result];
         end
     end
+    full_result = array2table(full_result, 'RowNames',strcat(cellstr(num2str(reshape(repmat([1:6],4,1),[],1))),{'_'},repmat(freq_strings',6,1)), ...
+            'VariableNames',{'R2','pR2','R2_lowerCI','R2_higherCI','b','pCoeff','b_lowerCI','b_higherCI'});
+    writetable(full_result,fullfile(datapath,'stats',[ptID,'_dPLV_stim.csv']),'WriteRowNames',true)
+
     %%% end of insertion
     
     % store
@@ -326,18 +410,30 @@ for pt = 1:length(localization)
     plasticity(pt).plv_slope_std_bin = plv_slope_std;
     plasticity(pt).dplv_slope_std_bin = dplv_slope_std;
     plasticity(pt).zplv_slope_std_bin = zplv_slope_std;
-    plasticity(pt).R2_time = fit_dplv_R2;
-    plasticity(pt).p_time = fit_dplv_p;
-    plasticity(pt).Coeff_time = fit_dplv_coeff;
-    plasticity(pt).pCoeff_time = fit_dplv_pcoeff;
-    plasticity(pt).R2_time_bin = fit_dplv_R2_bin;
-    plasticity(pt).p_time_bin = fit_dplv_p_bin;
-    plasticity(pt).Coeff_time_bin = fit_dplv_coeff_bin;
-    plasticity(pt).pCoeff_time_bin = fit_dplv_pcoeff_bin;
-    plasticity(pt).R2_stim = fitstim_dplv_R2;
-    plasticity(pt).p_stim = fitstim_dplv_p;
-    plasticity(pt).Coeff_stim = fitstim_dplv_coeff;
-    plasticity(pt).pCoeff_stim= fitstim_dplv_pcoeff;
+    plasticity(pt).R2_time = fit_plv_R2;
+    plasticity(pt).p_time = fit_plv_p;
+    plasticity(pt).Coeff_time = fit_plv_coeff;
+    plasticity(pt).pCoeff_time = fit_plv_pcoeff;
+    plasticity(pt).R2_time_bin = fit_plv_R2_bin;
+    plasticity(pt).p_time_bin = fit_plv_p_bin;
+    plasticity(pt).Coeff_time_bin = fit_plv_coeff_bin;
+    plasticity(pt).pCoeff_time_bin = fit_plv_pcoeff_bin;
+    plasticity(pt).R2_stim = fitstim_plv_R2;
+    plasticity(pt).p_stim = fitstim_plv_p;
+    plasticity(pt).Coeff_stim = fitstim_plv_coeff;
+    plasticity(pt).pCoeff_stim= fitstim_plv_pcoeff;
+    plasticity(pt).R2_time_noint = fit_dplv_R2;
+    plasticity(pt).p_time_noint = fit_dplv_p;
+    plasticity(pt).Coeff_time_noint = fit_dplv_coeff;
+    plasticity(pt).pCoeff_time_noint = fit_dplv_pcoeff;
+    plasticity(pt).R2_time_bin_noint = fit_dplv_R2_bin;
+    plasticity(pt).p_time_bin_noint = fit_dplv_p_bin;
+    plasticity(pt).Coeff_time_bin_noint = fit_dplv_coeff_bin;
+    plasticity(pt).pCoeff_time_bin_noint = fit_dplv_pcoeff_bin;
+    plasticity(pt).R2_stim_noint = fitstim_dplv_R2;
+    plasticity(pt).p_stim_noint = fitstim_dplv_p;
+    plasticity(pt).Coeff_stim_noint = fitstim_dplv_coeff;
+    plasticity(pt).pCoeff_stim_noint = fitstim_dplv_pcoeff;
     %
 end
 save(fullfile(datapath,['plasticity_',num2str(bin_size),suffix,'.mat']),"plasticity")
@@ -401,6 +497,9 @@ plv_slope_std = [];dplv_slope_std = []; zplv_slope_std = [];
 R2_time = []; p_time = []; Coeff_time = [];pCoeff_time = [];
 R2_time_bin = []; p_time_bin = []; Coeff_time_bin = [];pCoeff_time_bin = [];
 R2_stim = []; p_stim = []; Coeff_stim = [];pCoeff_stim = [];
+R2_time_noint = []; p_time_noint = []; Coeff_time_noint = [];pCoeff_time_noint = [];
+R2_time_bin_noint = []; p_time_bin_noint = []; Coeff_time_bin_noint = [];pCoeff_time_bin_noint = [];
+R2_stim_noint = []; p_stim_noint = []; Coeff_stim_noint = [];pCoeff_stim_noint = [];
 for i = 1:length(plasticity)
     if isempty(plasticity(i).ptID)
         continue
@@ -438,19 +537,35 @@ for i = 1:length(plasticity)
             p_stim = [p_stim;plasticity(i).p_stim(j,f)];
             Coeff_stim = [Coeff_stim;plasticity(i).Coeff_stim(j,f)];
             pCoeff_stim = [pCoeff_stim;plasticity(i).pCoeff_stim(j,f)];
-            
+            R2_time_noint = [R2_time_noint;plasticity(i).R2_time_noint(j,f)];
+            p_time_noint = [p_time_noint;plasticity(i).p_time_noint(j,f)];
+            Coeff_time_noint = [Coeff_time_noint;plasticity(i).Coeff_time_noint(j,f)];
+            pCoeff_time_noint = [pCoeff_time_noint;plasticity(i).pCoeff_time_noint(j,f)];
+            R2_time_bin_noint = [R2_time_bin_noint;plasticity(i).R2_time_bin_noint(j,f)];
+            p_time_bin_noint = [p_time_bin_noint;plasticity(i).p_time_bin_noint(j,f)];
+            Coeff_time_bin_noint = [Coeff_time_bin_noint;plasticity(i).Coeff_time_bin_noint(j,f)];
+            pCoeff_time_bin_noint = [pCoeff_time_bin_noint;plasticity(i).pCoeff_time_bin_noint(j,f)];
+            R2_stim_noint = [R2_stim_noint;plasticity(i).R2_stim_noint(j,f)];
+            p_stim_noint = [p_stim_noint;plasticity(i).p_stim_noint(j,f)];
+            Coeff_stim_noint = [Coeff_stim_noint;plasticity(i).Coeff_stim_noint(j,f)];
+            pCoeff_stim_noint = [pCoeff_stim_noint;plasticity(i).pCoeff_stim_noint(j,f)];
         end
     end
 end
 tbl2 = array2table([pt,depth,outcome,freq,conn_type,bplv,...
     plv_std,dplv_std,zplv_std,plv_slope,dplv_slope,zplv_slope,plv_slope_std,dplv_slope_std,zplv_slope_std, ...
     R2_time,p_time,Coeff_time,pCoeff_time,R2_time_bin,p_time_bin,Coeff_time_bin,pCoeff_time_bin, ...
-    R2_stim,p_stim,Coeff_stim,pCoeff_stim],...
+    R2_stim,p_stim,Coeff_stim,pCoeff_stim,R2_time_noint,p_time_noint,Coeff_time_noint,pCoeff_time_noint, ...
+    R2_time_bin_noint,p_time_bin_noint,Coeff_time_bin_noint,pCoeff_time_bin_noint, ...
+    R2_stim_noint,p_stim_noint,Coeff_stim_noint,pCoeff_stim_noint],...
     'VariableNames',{'PtID','Depth','Outcome','Freq','Conn','BaselinePLV',...
     'PLV_std','dPLV_std','zPLV_std','PLV_Slope','dPLV_Slope','zPLV_Slope',...
     'PLV_Slope_std','dPLV_Slope_std','zPLV_Slope_std',...
     'R2_time','p_time','Coeff_time','pCoeff_time',...
     'R2_time_bin','p_time_bin','Coeff_time_bin','pCoeff_time_bin', ...
-    'R2_stim','p_stim','Coeff_stim','pCoeff_stim'});
+    'R2_stim','p_stim','Coeff_stim','pCoeff_stim', ...
+    'R2_time_noint','p_time_noint','Coeff_time_noint','pCoeff_time_noint',...
+    'R2_time_bin_noint','p_time_bin_noint','Coeff_time_bin_noint','pCoeff_time_bin_noint', ...
+    'R2_stim_noint','p_stim_noint','Coeff_stim_noint','pCoeff_stim_noint'});
 
 save(fullfile(datapath,['plasticity_',num2str(bin_size),suffix,'.mat']),'-append','tbl','tbl2');

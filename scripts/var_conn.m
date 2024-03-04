@@ -46,21 +46,30 @@ if ndims(outcome{1}) == 2
     tbl_active{:,'BaselinePLV'} = zscore(log(tbl_active{:,'BaselinePLV'}));
     f = figure('Visible','Off');
     f.Position = [100,100,1200,800];
-    for j = 1:4 % freq
+    for j = 1:3 % freq
         subplot(2,2,j)
         hold on
         tbl = tbl_active(tbl_active.Freq == j,:);
         disp(['Model ',num2str(model),', Outcome ',option,', Freq ',num2str(j)])
-        tmp_result = fitglmeBS(tbl,formula,500);
+        if startsWith(option,'Coeff')
+            tbl.(option2) = abs(tbl.(option2));
+        end
+        [tmp_result,intercept,outliers] = fitglmeBS(tbl,formula,500);
         R2 = tmp_result{1,1}; pR2 = tmp_result{1,2};
         b = tmp_result{2,1}; pCoeff = tmp_result{2,2};
         tmp_result = [tmp_result{1,:},tmp_result{2,:}];
         full_result = [full_result;tmp_result];
         scatter(tbl{:,'BaselinePLV'},tbl{:,option2},[],'k','filled');
+        hold on
+        scatter(tbl{outliers,'BaselinePLV'},tbl{outliers,option2},[],'r','filled');
+        plot(tbl{:,'BaselinePLV'},b*tbl{:,'BaselinePLV'}+intercept)
+        if contains(option,'R2')
+            ylim([-1,1])
+        end
         ylims = get(gca,'YLim');
         xlims = get(gca,'XLim');
         text(xlims(2)-0.25*(xlims(2)-xlims(1)),ylims(1)+0.2*(ylims(2)-ylims(1)), ...
-            {['R^2 = ', num2str(R2,'%.2f')];['pR2 = ', num2str(pR2,'%.3f')];['b = ', num2str(b,'%.3f')];['p_b = ', num2str(pCoeff,'%.3f')]})
+            {['R^2 = ', num2str(R2,'%.2f')];['b = ', num2str(b,'%.3f')];['p_b = ', num2str(pCoeff,'%.3f')]})
         title(freq_strings{j},'FontWeight','bold')
     end
     h = axes(f,'visible','off');
@@ -83,17 +92,20 @@ elseif ndims(outcome{1}) == 3
             hold on
             tbl = tbl_active(tbl_active.Freq == j & tbl_active.Time == t,:);
             disp(['Model ',num2str(model),', Outcome ',option,', Freq ',num2str(j),' Time ',num2str(t)])
-            tmp_result = fitglmeBS(tbl,formula,500);
+            [tmp_result,intercept,outliers] = fitglmeBS(tbl,formula,500);
             R2 = tmp_result{1,1}; pR2 = tmp_result{1,2};
             b = tmp_result{2,1}; pCoeff = tmp_result{2,2};
             tmp_result = [tmp_result{1,:},tmp_result{2,:}];
             full_result = [full_result;tmp_result];
             scatter(tbl{:,'BaselinePLV'},tbl{:,option},[],'k','filled');
+            hold on
+            scatter(tbl{outliers,'BaselinePLV'},tbl{outliers,option2},[],'r','filled');
+            plot(tbl{:,'BaselinePLV'},b*tbl{:,'BaselinePLV'}+intercept)
             title(freq_strings{j},'FontWeight','bold')
             ylims = get(gca,'YLim');
             xlims = get(gca,'XLim');
             text(xlims(2)-0.25*(xlims(2)-xlims(1)),ylims(1)+0.2*(ylims(2)-ylims(1)), ...
-                {['R^2 = ', num2str(R2,'%.2f')];['pR2 = ', num2str(pR2,'%.3f')];['b = ', num2str(b,'%.3f')];['p_b = ', num2str(pCoeff,'%.3f')]})
+                {['R^2 = ', num2str(R2,'%.2f')];['b = ', num2str(b,'%.3f')];['p_b = ', num2str(pCoeff,'%.3f')]})
         end
         h = axes(f,'visible','off');
         h.XLabel.Visible='on';
